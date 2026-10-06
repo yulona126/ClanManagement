@@ -13,6 +13,14 @@
 | TC-07 | owner，记录作者是他人 | `DELETE .../records/{rid}/` | 204/200 |
 | TC-08 | viewer | `POST .../media/presign/` | 403 |
 | TC-09 | 未带 token | 任意受保护接口 | 401 |
+| TC-12 | 非 staff | `GET /api/manage/users/` | 403 |
+| TC-13 | staff | `POST /api/manage/users/` 创建用户 | 201 |
+| TC-14 | owner | `POST .../members/invite/` 新用户 | 201；可登录 |
+| TC-15 | viewer | `POST .../members/invite/` | 403 |
+| TC-16 | owner，唯一 owner | `DELETE .../members/{self}/` | 400 |
+| TC-17 | editor，complete 带合法 `exif.gps` | 201；`latitude`/`longitude` 有值 |
+| TC-18 | editor，complete 无 `exif` 或无 gps | 201；经纬度 NULL |
+| TC-19 | editor，complete `gps.lat=999` | 201；经纬度忽略为 NULL（不整单失败） |
 
 ## 8.2 数据隔离
 
@@ -28,10 +36,12 @@
 | 0 | 前端显示「后端连接成功」 |
 | 1 | 登录 → `/api/auth/me/` 有用户名 |
 | 2 | 切换 Workspace，界面称呼变化；非成员 Workspace 不出现 |
+| 2.5 | staff 管理台建用户；owner 邀请；非 staff 无管理入口 |
 | 3 | viewer 无创建按钮；editor 可建记录 |
-| 4 | 上传图片 → 列表缩略图 → 大图 |
-| 5 | 录音上传可播放 |
-| 6 | 生产域名 HTTPS 下主流程可用 |
+| 4 | 上传带 GPS 的图 → DB 有经纬度 → 列表缩略图 → 大图；无 EXIF 图亦可上传 |
+| 5 | 媒体库看全部图 → 点图进记录；记录/图片可评论；按年龄分段（有生日时） |
+| 6 | 记录/评论按住说话上传音频并可播放 |
+| 7 | 生产域名 HTTPS 下主流程可用 |
 
 ## 8.4 自动化建议
 
