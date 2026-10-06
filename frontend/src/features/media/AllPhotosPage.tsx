@@ -77,8 +77,8 @@ export function AllPhotosPage() {
     if (!current || !files.length) return
     setUploading(true)
     try {
-      await uploadFilesToLibrary(current.id, files)
-      message.success(`已上传 ${files.length} 张`)
+      const added = await uploadFilesToLibrary(current.id, files)
+      message.success(`已上传 ${added.length} 张`)
       setReloadKey((k) => k + 1)
       setPage(1)
     } catch (err) {

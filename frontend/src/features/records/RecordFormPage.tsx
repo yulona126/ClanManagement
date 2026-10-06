@@ -11,6 +11,10 @@ import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { uploadFilesToRecord } from '../media/upload'
 import { extractVideoPoster } from '../media/extractVideoPoster'
+import {
+  filterLivePhotoCompanions,
+  isVideoFile,
+} from '../media/fileKind'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 
 type Mode = 'create' | 'edit'
@@ -23,11 +27,6 @@ type PendingItem = {
 }
 
 const MAX_MEDIA = 9
-
-function isVideoFile(file: File): boolean {
-  if (file.type.startsWith('video/')) return true
-  return /\.(mp4|mov|webm|m4v)$/i.test(file.name)
-}
 
 function fileKind(file: File): PendingItem['kind'] {
   return isVideoFile(file) ? 'video' : 'image'
@@ -94,7 +93,11 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
       message.warning('最多 9 个图片/视频')
       return
     }
-    const slice = files.slice(0, room)
+    const filtered = filterLivePhotoCompanions(files)
+    if (filtered.length < files.length) {
+      message.info('已忽略实况照片的配套短视频，只保留静止图')
+    }
+    const slice = filtered.slice(0, room)
     const next: PendingItem[] = []
     for (const file of slice) {
       const kind = fileKind(file)

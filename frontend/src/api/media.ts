@@ -105,25 +105,49 @@ export async function completeMedia(
   return data
 }
 
+/** Scale PUT timeout with size (min 60s, ~80KB/s floor, cap 10 min). */
+function putTimeoutMs(byteLength: number): number {
+  const fromSize = Math.ceil(byteLength / 80_000) * 1000
+  return Math.min(600_000, Math.max(60_000, fromSize))
+}
+
 export async function putToUploadUrl(
   uploadUrl: string,
   file: Blob,
   headers: Record<string, string>,
 ): Promise<void> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(
+    () => controller.abort(),
+    putTimeoutMs(file.size),
+  )
   let res: Response
   try {
     res = await fetch(uploadUrl, {
       method: 'PUT',
       headers,
       body: file,
+      signal: controller.signal,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('上传超时，请检查网络后重试（大图已会自动压缩）。')
+    }
     throw new Error(
-      '无法直传对象存储（多为 CORS 或 Bucket 配置问题）。请确认新 Bucket 已配置 CORS，并重启后端。',
+      '无法直传对象存储（多为 CORS 或 Bucket 配置问题）。请对生产域名执行 configure_oss_cors --origin https://你的域名',
     )
+  } finally {
+    window.clearTimeout(timer)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`上传失败 HTTP ${res.status}${text ? ` ${text.slice(0, 120)}` : ''}`)
+    if (res.status === 403) {
+      throw new Error(
+        '上传被拒绝（403）。常见原因：预签名 Content-Type 与文件不一致，或 OSS CORS/权限未配好。',
+      )
+    }
+    throw new Error(
+      `上传失败 HTTP ${res.status}${text ? ` ${text.slice(0, 120)}` : ''}`,
+    )
   }
 }

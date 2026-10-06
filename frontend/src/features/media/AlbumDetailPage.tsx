@@ -111,8 +111,8 @@ export function AlbumDetailPage() {
     if (!current || !album || !files.length) return
     setUploading(true)
     try {
-      await uploadFilesToAlbum(current.id, album.id, files)
-      message.success(`已上传 ${files.length} 张`)
+      const added = await uploadFilesToAlbum(current.id, album.id, files)
+      message.success(`已上传 ${added.length} 张`)
       setReloadKey((k) => k + 1)
     } catch (err) {
       message.error(friendlyError(err, '上传失败'))

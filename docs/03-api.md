@@ -500,6 +500,7 @@ owner / editor 可上传任意类型；**普通成员仅可上传 `media_type=au
 3. `thumbnail_url`：
    - 图片：OSS 下序列化时可拼 `x-oss-process=image/resize`；本地用原图 URL。
    - 视频：若传了 `thumbnail_object_key` → 存其公开 URL（本地抽帧封面）；否则 OSS 下拼 `video/snapshot`；再否则空（Feed 用占位）。
+   - 客户端上传前会：过滤 iOS 实况配套 MOV、HEIC→JPEG、过大图缩到长边 2560（再 PUT）。
 4. 规范化 `exif`：非法数字/越界 GPS（lat∉[-90,90]、lng∉[-180,180]）→ 对应字段置空，**不导致整单失败**；未知 `extra` 键丢弃。
 5. 写入 `MediaAsset`，**201** 返回完整媒体对象（含 GPS 列，对本 Workspace 全体成员可见）。
 
