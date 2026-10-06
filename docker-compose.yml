@@ -1,0 +1,74 @@
+# Claner — one-command stack (db + api + web)
+#
+# Quick start:
+#   cp .env.example .env   # edit secrets / hosts / OSS
+#   docker compose up -d --build
+#   open http://localhost/
+#
+# Local dev (DB only, as before):
+#   docker compose up -d db
+
+name: claner
+
+services:
+  db:
+    image: postgres:16
+    container_name: claner-pg
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-claner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claner}
+      POSTGRES_DB: ${POSTGRES_DB:-claner}
+    ports:
+      # Host 5433 for local `runserver`; containers talk on internal 5432
+      - "${POSTGRES_PUBLISH_PORT:-5433}:5432"
+    volumes:
+      - claner_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-claner} -d ${POSTGRES_DB:-claner}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: claner-api
+    env_file:
+      - .env
+    environment:
+      DJANGO_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-claner}:${POSTGRES_PASSWORD:-claner}@db:5432/${POSTGRES_DB:-claner}
+      # Override host networking defaults from .env for in-compose DNS
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-}
+    volumes:
+      - claner_media:/app/media
+      - claner_static:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: claner-web
+    ports:
+      - "${WEB_PUBLISH_PORT:-80}:80"
+    volumes:
+      - claner_media:/var/www/media:ro
+      - claner_static:/var/www/static:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  claner_pg_data:
+  claner_media:
+  claner_static:
