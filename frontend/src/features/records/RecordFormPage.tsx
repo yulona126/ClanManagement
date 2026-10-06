@@ -26,6 +26,18 @@ type PendingItem = {
   kind: 'image' | 'video'
 }
 
+type ItemUploadStatus = 'idle' | 'compressing' | 'uploading' | 'done'
+
+type PublishPhase =
+  | { kind: 'idle' }
+  | { kind: 'saving' }
+  | {
+      kind: 'uploading'
+      completed: number
+      total: number
+      detail?: string
+    }
+
 const MAX_MEDIA = 9
 
 function fileKind(file: File): PendingItem['kind'] {
@@ -44,9 +56,13 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
   const [content, setContent] = useState('')
   const [pending, setPending] = useState<PendingItem[]>([])
   const [loading, setLoading] = useState(mode === 'edit')
-  const [saving, setSaving] = useState(false)
+  const [phase, setPhase] = useState<PublishPhase>({ kind: 'idle' })
+  const [itemStatus, setItemStatus] = useState<
+    Record<string, ItemUploadStatus>
+  >({})
   const [forbidden, setForbidden] = useState(false)
 
+  const busy = phase.kind !== 'idle'
   const canWrite =
     current?.my_role === 'owner' || current?.my_role === 'editor'
 
@@ -143,7 +159,8 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
     const workspaceId = current.id
     const pendingSnapshot = pending
     const hadMedia = pendingSnapshot.length > 0
-    setSaving(true)
+    setPhase({ kind: 'saving' })
+    setItemStatus({})
     let targetId = rid
     let recordCreated = mode === 'edit'
     try {
@@ -161,10 +178,38 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
         })
       }
       if (hadMedia) {
+        const total = pendingSnapshot.length
+        setPhase({ kind: 'uploading', completed: 0, total })
         await uploadFilesToRecord(
           workspaceId,
           targetId,
           pendingSnapshot.map((p) => p.file),
+          ({ completed, total: t, index, phase: p, uploadBytes }) => {
+            const uid = pendingSnapshot[index]?.uid
+            if (uid) {
+              setItemStatus((prev) => ({
+                ...prev,
+                [uid]:
+                  p === 'done'
+                    ? 'done'
+                    : p === 'compress'
+                      ? 'compressing'
+                      : 'uploading',
+              }))
+            }
+            const detail =
+              p === 'compress'
+                ? '正在压缩大图…'
+                : p === 'start' && uploadBytes != null
+                  ? `正在上传约 ${(uploadBytes / 1024).toFixed(0)}KB…`
+                  : undefined
+            setPhase({
+              kind: 'uploading',
+              completed,
+              total: t,
+              detail,
+            })
+          },
         )
       }
       message.success(mode === 'create' ? '已发布' : '已保存')
@@ -179,7 +224,8 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
         return
       }
       message.error(msg)
-      setSaving(false)
+      setPhase({ kind: 'idle' })
+      setItemStatus({})
     }
   }
 
@@ -188,14 +234,42 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
   }
 
   const backTo = mode === 'edit' ? `/records/${rid}` : '/'
-  const canAddMore = pending.length < MAX_MEDIA
+  const canAddMore = pending.length < MAX_MEDIA && !busy
+
+  let submitLabel = mode === 'create' ? '发表' : '保存'
+  if (phase.kind === 'saving') {
+    submitLabel = '保存中…'
+  } else if (phase.kind === 'uploading') {
+    submitLabel =
+      phase.total > 0
+        ? `上传 ${phase.completed}/${phase.total}`
+        : '上传中…'
+  }
+
+  let statusHint = ''
+  if (phase.kind === 'saving') {
+    statusHint = '正在保存动态…'
+  } else if (phase.kind === 'uploading') {
+    statusHint =
+      phase.detail ||
+      (phase.completed < phase.total
+        ? `正在上传图片/视频（${phase.completed}/${phase.total}），请稍候`
+        : '即将完成…')
+  }
 
   return (
-    <div className="compose-form compose-form--moments">
+    <div
+      className={`compose-form compose-form--moments${busy ? ' is-publishing' : ''}`}
+      aria-busy={busy}
+    >
       <header className="compose-top">
-        <Link className="compose-cancel" to={backTo}>
-          取消
-        </Link>
+        {busy ? (
+          <span className="compose-cancel is-disabled">取消</span>
+        ) : (
+          <Link className="compose-cancel" to={backTo}>
+            取消
+          </Link>
+        )}
         <h1 className="compose-top-title">
           {mode === 'create' ? '发动态' : '编辑'}
         </h1>
@@ -203,12 +277,19 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
           variant="primary"
           type="button"
           className="compose-top-submit"
-          disabled={saving}
+          disabled={busy}
           onClick={() => void onPublish()}
         >
-          {saving ? '…' : mode === 'create' ? '发表' : '保存'}
+          {submitLabel}
         </Button>
       </header>
+
+      {statusHint ? (
+        <p className="compose-upload-status" role="status" aria-live="polite">
+          <span className="compose-upload-spinner" aria-hidden />
+          {statusHint}
+        </p>
+      ) : null}
 
       <textarea
         className="compose-textarea compose-textarea--moments"
@@ -216,36 +297,52 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
         onChange={(e) => setContent(e.target.value)}
         rows={6}
         placeholder="这一刻的想法…"
-        disabled={saving}
+        disabled={busy}
       />
 
       {pending.length > 0 || canAddMore ? (
         <ul className="compose-previews" aria-label="已选媒体">
-          {pending.map((item) => (
-            <li key={item.uid} className="compose-preview-item">
-              {item.previewUrl ? (
-                <img src={item.previewUrl} alt="" />
-              ) : (
-                <span className="compose-file-chip">
-                  {item.kind === 'video' ? '视频' : '文件'}
-                </span>
-              )}
-              {item.kind === 'video' ? (
-                <span className="compose-preview-play" aria-hidden>
-                  ▶
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="compose-remove"
-                aria-label="移除"
-                disabled={saving}
-                onClick={() => removePending(item.uid)}
+          {pending.map((item) => {
+            const st = itemStatus[item.uid] ?? 'idle'
+            return (
+              <li
+                key={item.uid}
+                className={`compose-preview-item${st !== 'idle' ? ` is-${st}` : ''}`}
               >
-                ×
-              </button>
-            </li>
-          ))}
+                {item.previewUrl ? (
+                  <img src={item.previewUrl} alt="" />
+                ) : (
+                  <span className="compose-file-chip">
+                    {item.kind === 'video' ? '视频' : '文件'}
+                  </span>
+                )}
+                {item.kind === 'video' && st === 'idle' ? (
+                  <span className="compose-preview-play" aria-hidden>
+                    ▶
+                  </span>
+                ) : null}
+                {st === 'compressing' || st === 'uploading' ? (
+                  <span className="compose-preview-overlay" aria-hidden>
+                    <span className="compose-upload-spinner" />
+                  </span>
+                ) : null}
+                {st === 'done' ? (
+                  <span className="compose-preview-overlay is-done" aria-hidden>
+                    ✓
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="compose-remove"
+                  aria-label="移除"
+                  disabled={busy}
+                  onClick={() => removePending(item.uid)}
+                >
+                  ×
+                </button>
+              </li>
+            )
+          })}
           {canAddMore ? (
             <li className="compose-preview-item compose-preview-add">
               <input
@@ -253,7 +350,7 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
                 type="file"
                 accept="image/*,video/*,image/heic,image/heif"
                 multiple
-                disabled={saving}
+                disabled={busy}
                 onChange={(e) => {
                   const list = e.target.files ? Array.from(e.target.files) : []
                   e.target.value = ''
