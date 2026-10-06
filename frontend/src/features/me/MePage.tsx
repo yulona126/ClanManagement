@@ -5,6 +5,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { patchMe, uploadMyAvatar } from '../../api/auth'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
+import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
+import { resolveMediaUrl } from '../media/mediaUrl'
 
 export function MePage() {
   const { user, logout, refreshUser } = useAuth()
@@ -44,7 +46,8 @@ export function MePage() {
     if (!file) return
     setUploading(true)
     try {
-      const me = await uploadMyAvatar(file)
+      const prepared = await prepareAvatarForUpload(file)
+      const me = await uploadMyAvatar(prepared)
       setAvatarUrl(me.avatar_url)
       await refreshUser()
       message.success('头像已更新')
@@ -56,6 +59,7 @@ export function MePage() {
   }
 
   const initial = (displayName || user?.username || '?').slice(0, 1)
+  const avatarSrc = avatarUrl.trim() ? resolveMediaUrl(avatarUrl.trim()) : ''
 
   return (
     <div className="plain-page">
@@ -78,7 +82,7 @@ export function MePage() {
           disabled={uploading}
           aria-label="更换头像"
         >
-          {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{initial}</span>}
+          {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{initial}</span>}
         </button>
         <input
           ref={fileRef}

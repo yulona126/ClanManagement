@@ -131,9 +131,9 @@ SIMPLE_JWT = {
 }
 
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
-PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "http://127.0.0.1:8001").rstrip(
-    "/",
-)
+# Empty = relative upload/media URLs (Vite proxy / same-origin). Do NOT default to 127.0.0.1
+# or phones on LAN will PUT to themselves.
+PUBLIC_API_BASE_URL = (os.getenv("PUBLIC_API_BASE_URL") or "").rstrip("/")
 
 # Aliyun OSS (S3-compatible). Image/video/audio share one bucket (ADR-011).
 OSS_ACCESS_KEY_ID = os.getenv("OSS_ACCESS_KEY_ID", "")

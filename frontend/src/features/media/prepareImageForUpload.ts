@@ -1,13 +1,23 @@
 import { inferContentType, isHeicLike, isImageFile } from './fileKind'
 
-/** Longest edge after re-encode — favours upload speed on mobile networks. */
-const MAX_EDGE = 1920
-/** Always recompress when larger than this. */
-const REENCODE_IF_LARGER_THAN = 1_200_000
-/** Prefer not to upload anything larger than this after prepare. */
-const TARGET_MAX_BYTES = 1_200_000
-const JPEG_QUALITY = 0.72
-const JPEG_QUALITY_LOW = 0.58
+export type PrepareImageOptions = {
+  /** Longest edge after re-encode. Default 1920 (feed); use ~1280 for avatars. */
+  maxEdge?: number
+  /** Always recompress when larger than this. */
+  reencodeAboveBytes?: number
+  /** Prefer final JPEG under this size. */
+  targetMaxBytes?: number
+  jpegQuality?: number
+  jpegQualityLow?: number
+}
+
+const DEFAULTS = {
+  maxEdge: 1920,
+  reencodeAboveBytes: 1_200_000,
+  targetMaxBytes: 1_200_000,
+  jpegQuality: 0.72,
+  jpegQualityLow: 0.58,
+} as const
 
 type Decoded = {
   source: CanvasImageSource
@@ -29,14 +39,9 @@ function targetSize(width: number, height: number, maxEdge: number) {
   }
 }
 
-/**
- * Decode and preferably downscale in one step (avoids keeping a 12MP bitmap
- * around on phones when we only need ~1920 long edge).
- */
 async function decodeImage(file: File, maxEdge: number): Promise<Decoded> {
   if (typeof createImageBitmap === 'function') {
     try {
-      // First pass: get natural size (needed for correct aspect).
       const full = await createImageBitmap(file)
       const { width, height } = full
       const { w, h, scaled } = targetSize(width, height, maxEdge)
@@ -62,7 +67,6 @@ async function decodeImage(file: File, maxEdge: number): Promise<Decoded> {
           close: () => small.close(),
         }
       } catch {
-        // Fall back to drawing the full bitmap into a smaller canvas later.
         return {
           source: full,
           width,
@@ -71,7 +75,7 @@ async function decodeImage(file: File, maxEdge: number): Promise<Decoded> {
         }
       }
     } catch {
-      // Fall through — Safari HEIC / older WebViews.
+      // Fall through
     }
   }
 
@@ -124,13 +128,22 @@ function jpegName(original: string): string {
 }
 
 /**
- * Normalize phone photos before OSS PUT:
+ * Normalize phone photos before upload:
  * - HEIC/HEIF → JPEG
- * - Downscale long edge > 1920
- * - Recompress oversized JPEG/PNG (e.g. 9MB phone originals → ~300–800KB)
+ * - Downscale + recompress oversized JPEG/PNG
  */
-export async function prepareImageForUpload(file: File): Promise<File> {
+export async function prepareImageForUpload(
+  file: File,
+  options: PrepareImageOptions = {},
+): Promise<File> {
   if (!isImageFile(file)) return file
+
+  const maxEdge = options.maxEdge ?? DEFAULTS.maxEdge
+  const reencodeAboveBytes =
+    options.reencodeAboveBytes ?? DEFAULTS.reencodeAboveBytes
+  const targetMaxBytes = options.targetMaxBytes ?? DEFAULTS.targetMaxBytes
+  const jpegQuality = options.jpegQuality ?? DEFAULTS.jpegQuality
+  const jpegQualityLow = options.jpegQualityLow ?? DEFAULTS.jpegQualityLow
 
   const heic = isHeicLike(file)
   const type = inferContentType(file).toLowerCase()
@@ -138,15 +151,15 @@ export async function prepareImageForUpload(file: File): Promise<File> {
   const browserFriendly =
     isJpeg || type === 'image/webp' || type === 'image/gif'
 
-  if (!heic && browserFriendly && file.size <= REENCODE_IF_LARGER_THAN) {
+  if (!heic && browserFriendly && file.size <= reencodeAboveBytes) {
     return file
   }
 
   let decoded: Decoded
   try {
-    decoded = await decodeImage(file, MAX_EDGE)
+    decoded = await decodeImage(file, maxEdge)
   } catch {
-    if (heic || file.size > REENCODE_IF_LARGER_THAN) {
+    if (heic || file.size > reencodeAboveBytes) {
       throw new Error(
         '图片过大或无法解码。请换一张，或在相册里用「导出 JPEG / 缩小」后再试。',
       )
@@ -160,8 +173,7 @@ export async function prepareImageForUpload(file: File): Promise<File> {
       throw new Error('无法读取图片尺寸，请换一张后再试。')
     }
 
-    const { w, h } = targetSize(width, height, MAX_EDGE)
-    // decoded may already be resized; draw at its bitmap size if smaller target applied.
+    const { w, h } = targetSize(width, height, maxEdge)
     const outW = Math.min(w, width)
     const outH = Math.min(h, height)
 
@@ -169,23 +181,21 @@ export async function prepareImageForUpload(file: File): Promise<File> {
       decoded.source,
       outW,
       outH,
-      JPEG_QUALITY,
+      jpegQuality,
     )
 
-    // Still huge (detail-rich scene): one more pass at lower quality / edge.
-    if (blob.size > TARGET_MAX_BYTES) {
-      const tighter = targetSize(outW, outH, 1600)
+    if (blob.size > targetMaxBytes) {
+      const tighter = targetSize(outW, outH, Math.min(1600, maxEdge))
       blob = await canvasToJpeg(
         decoded.source,
         tighter.w,
         tighter.h,
-        JPEG_QUALITY_LOW,
+        jpegQualityLow,
       )
     }
 
     if (!heic && blob.size >= file.size) {
-      // Re-encode didn't help — keep original only if it is already modest.
-      if (file.size <= TARGET_MAX_BYTES) return file
+      if (file.size <= targetMaxBytes) return file
       throw new Error(
         `图片压缩后仍约 ${(blob.size / 1024 / 1024).toFixed(1)}MB，上传可能失败。请换一张较小的照片。`,
       )
@@ -196,10 +206,16 @@ export async function prepareImageForUpload(file: File): Promise<File> {
       lastModified: file.lastModified,
     })
   } catch (err) {
-    if (err instanceof Error && err.message && !err.message.includes('canvas') && !err.message.includes('toBlob') && !err.message.includes('decode')) {
+    if (
+      err instanceof Error &&
+      err.message &&
+      !err.message.includes('canvas') &&
+      !err.message.includes('toBlob') &&
+      !err.message.includes('decode')
+    ) {
       throw err
     }
-    if (heic || file.size > REENCODE_IF_LARGER_THAN) {
+    if (heic || file.size > reencodeAboveBytes) {
       throw new Error(
         '压缩这张照片失败（常见于超大 JPEG）。请再试一次，或先缩小后再上传。',
       )
@@ -208,4 +224,15 @@ export async function prepareImageForUpload(file: File): Promise<File> {
   } finally {
     decoded.close?.()
   }
+}
+
+/** Stricter prep for avatar / cover (smaller, always under multipart limits). */
+export function prepareAvatarForUpload(file: File): Promise<File> {
+  return prepareImageForUpload(file, {
+    maxEdge: 1280,
+    reencodeAboveBytes: 400_000,
+    targetMaxBytes: 700_000,
+    jpegQuality: 0.78,
+    jpegQualityLow: 0.62,
+  })
 }

@@ -10,6 +10,7 @@ import {
 } from '../../api/manage'
 import { friendlyError } from '../../components/friendlyError'
 import { resolveMediaUrl } from '../media/mediaUrl'
+import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
 import { avatarInitial } from '../feed/time'
 import {
   ManageEmpty,
@@ -107,7 +108,8 @@ export function ManageWorkspacesPage() {
           : null,
       })
       if (avatarFile) {
-        await uploadManageWorkspaceAvatar(ws.id, avatarFile)
+        const prepared = await prepareAvatarForUpload(avatarFile)
+        await uploadManageWorkspaceAvatar(ws.id, prepared)
       }
       form.resetFields()
       resetAvatar()

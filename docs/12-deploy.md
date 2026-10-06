@@ -340,7 +340,7 @@ server {
     root /opt/claner/app/frontend/dist;
     index index.html;
 
-    client_max_body_size 4m;  # API JSON 为主；大文件直传 OSS
+    client_max_body_size 32m;  # 头像 multipart / local-put；动态大图走 OSS 直传
 
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
@@ -475,7 +475,7 @@ docker exec claner-pg pg_dump -U claner claner | gzip > claner-$(date +%F).sql.g
 | 上传 Network Error | OSS CORS 是否含生产 Origin；`configure_oss_cors --origin https://域名` |
 | 上传 403 | PUT 的 Content-Type 须与预签名一致；iOS 空 MIME 已由前端推断/转 JPEG |
 | HEIC/实况失败 | 前端会转 JPEG 并丢掉配套 MOV；仍失败时让用户导出 JPEG |
-| 大图很慢 | 前端会压到长边 ≤2560；确认已部署最新前端 |
+| 大图很慢 | 前端会压到长边 ≤1920；确认已部署最新前端 |
 | CSRF 403 on Admin | `CSRF_TRUSTED_ORIGINS` 必须带 `https://` 域名 |
 | DisallowedHost | `DJANGO_ALLOWED_HOSTS` 漏域名 |
 | PWA 装不上 | 必须 HTTPS；检查 manifest / SW |

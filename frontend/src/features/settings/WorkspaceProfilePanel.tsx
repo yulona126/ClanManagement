@@ -9,6 +9,7 @@ import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { avatarInitial } from '../feed/time'
 import { resolveMediaUrl } from '../media/mediaUrl'
+import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 
 export function WorkspaceProfilePanel() {
@@ -58,7 +59,8 @@ export function WorkspaceProfilePanel() {
     if (!file || !current) return
     setUploading(true)
     try {
-      const ws = await uploadWorkspaceAvatar(current.id, file)
+      const prepared = await prepareAvatarForUpload(file)
+      const ws = await uploadWorkspaceAvatar(current.id, prepared)
       setAvatarUrl(ws.avatar_url)
       await reload()
       message.success('照片已更新')
