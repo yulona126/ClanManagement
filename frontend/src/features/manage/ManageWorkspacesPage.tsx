@@ -1,4 +1,4 @@
-import { Button, DatePicker, Form, Input, Table, Upload } from 'antd'
+import { Button, DatePicker, Form, Input, Table } from 'antd'
 import type { Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -80,6 +80,12 @@ export function ManageWorkspacesPage() {
     })
   }
 
+  function openCreate() {
+    form.resetFields()
+    resetAvatar()
+    setOpen(true)
+  }
+
   function closeModal() {
     if (submitting) return
     setOpen(false)
@@ -123,7 +129,7 @@ export function ManageWorkspacesPage() {
         title="宝宝空间"
         description="仅管理员可创建。创建后到「成员关系」把家人加入空间。"
         actions={
-          <Button type="primary" onClick={() => setOpen(true)}>
+          <Button type="primary" onClick={openCreate}>
             新建宝宝空间
           </Button>
         }
@@ -235,34 +241,38 @@ export function ManageWorkspacesPage() {
           onFinish={(v) => void onCreate(v)}
         >
           <Form.Item label="宝宝照片（可选）">
-            <Upload
-              accept="image/*"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                setAvatarFile(file)
-                setAvatarPreview((prev) => {
-                  if (prev) URL.revokeObjectURL(prev)
-                  return URL.createObjectURL(file)
-                })
-                return false
-              }}
-            >
-              <button type="button" className="manage-ws-cover-pick">
-                {avatarPreview ? (
-                  <img src={avatarPreview} alt="" />
-                ) : (
-                  <span>{previewInitial}</span>
-                )}
-                <em>{avatarPreview ? '更换照片' : '点击上传'}</em>
-              </button>
-            </Upload>
+            <label className="manage-ws-cover-pick">
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={submitting}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null
+                  e.target.value = ''
+                  if (!file) return
+                  setAvatarFile(file)
+                  setAvatarPreview((prev) => {
+                    if (prev) URL.revokeObjectURL(prev)
+                    return URL.createObjectURL(file)
+                  })
+                }}
+              />
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="" />
+              ) : (
+                <span aria-hidden>{previewInitial}</span>
+              )}
+              <em>{avatarPreview ? '更换照片' : '点击上传'}</em>
+            </label>
           </Form.Item>
           <Form.Item
             name="baby_name"
             label="宝宝名"
-            rules={[{ required: true, message: '请填写宝宝名' }]}
+            rules={[{ required: true, whitespace: true, message: '请填写宝宝名' }]}
+            validateTrigger="onBlur"
           >
-            <Input placeholder="例如：小满" maxLength={50} />
+            <Input placeholder="例如：小满" maxLength={50} autoFocus />
           </Form.Item>
           <Form.Item name="baby_birthday" label="出生日期（可选）">
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />

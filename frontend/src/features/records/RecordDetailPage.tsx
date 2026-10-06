@@ -17,7 +17,8 @@ import { CommentsPanel } from '../media/CommentsPanel'
 import { MediaFilePicker } from '../media/MediaFilePicker'
 import { MediaGallery } from '../media/MediaGallery'
 import { uploadAudioBlobToRecord, uploadFilesToRecord } from '../media/upload'
-import { avatarInitial, formatRelativeTime } from '../feed/time'
+import { AuthorAvatar } from '../feed/AuthorAvatar'
+import { formatRelativeTime } from '../feed/time'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 
 type DetailLocationState = {
@@ -247,9 +248,11 @@ export function RecordDetailPage() {
       </div>
 
       <header className="moments-post-head">
-        <div className="moments-avatar" aria-hidden>
-          {avatarInitial(author)}
-        </div>
+        <AuthorAvatar
+          className="moments-avatar"
+          label={author}
+          avatarUrl={record.author_avatar_url}
+        />
         <div className="moments-post-meta">
           <p className="moments-author">{author}</p>
           <time className="meta">{formatRelativeTime(record.created_at)}</time>

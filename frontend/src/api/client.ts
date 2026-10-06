@@ -10,7 +10,8 @@ const baseURL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export const api = axios.create({
   baseURL,
-  timeout: 10_000,
+  // Local media PUT + complete can exceed 10s behind Tunnel.
+  timeout: 60_000,
 })
 
 api.interceptors.request.use((config) => {
