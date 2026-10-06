@@ -7,6 +7,8 @@ from django.core.management.base import BaseCommand, CommandError
 DEFAULT_ORIGINS = [
     "http://localhost:5180",
     "http://127.0.0.1:5180",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://192.168.50.247:5180",
     "http://192.168.50.249:5180",
 ]

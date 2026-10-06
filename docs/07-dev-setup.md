@@ -137,9 +137,9 @@ CORS_ALLOWED_ORIGINS=http://localhost:5180,http://127.0.0.1:5180
 # Docker compose 默认映射 5433；本机 Postgres 常用 5432
 DATABASE_URL=postgres://claner:claner@127.0.0.1:5433/claner
 
-STORAGE_BACKEND=local
+STORAGE_BACKEND=oss
 
-# 本地直传回调与 file_url 拼装用
+# 本地直传回调与 file_url 拼装用（仅 STORAGE_BACKEND=local 时需要）
 PUBLIC_API_BASE_URL=http://127.0.0.1:8001
 
 # 阿里云 OSS（STORAGE_BACKEND=oss）；图/视频/音频共用一个 Bucket
@@ -155,7 +155,7 @@ OSS_CUSTOM_DOMAIN=
 
 | 变量 | 作用 |
 | :--- | :--- |
-| `STORAGE_BACKEND` | `local` 或 `oss`；部署切存储只改此开关 + OSS 变量 |
+| `STORAGE_BACKEND` | `oss`（推荐）或 `local`；部署切存储只改此开关 + OSS 变量 |
 | `OSS_BUCKET_NAME` | 目标 Bucket，默认示例 `claner`；换环境换桶只改此值 |
 | `OSS_ENDPOINT` / `OSS_REGION` | 地域 Endpoint 与 region（与控制台一致） |
 | `OSS_CUSTOM_DOMAIN` | 可选 CDN 域名；空则用 `https://{bucket}.{endpoint主机}/{object_key}` |
@@ -164,6 +164,8 @@ OSS_CUSTOM_DOMAIN=
 **不需要**为图片、视频分两个 Bucket（见 ADR-011）。对象键形如：
 
 `workspaces/{workspace_id}/records/{record_id}/{uuid}.jpg|mp4|webm|…`
+
+前端上传前会：过滤 iOS 实况配套 MOV、HEIC→JPEG、过大图缩到长边 2560。OSS 列表缩略图仍用 `x-oss-process`。
 
 OSS Bucket 需配置 CORS：允许前端源、方法 `PUT`/`GET`/`HEAD`、暴露必要头。
 

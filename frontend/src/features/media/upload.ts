@@ -6,7 +6,15 @@ import {
   type MediaType,
 } from '../../api/media'
 import { extractVideoPoster } from './extractVideoPoster'
+import {
+  filterLivePhotoCompanions,
+  inferContentType,
+  isAudioFile,
+  isImageFile,
+  isVideoFile,
+} from './fileKind'
 import { parseImageExif } from './parseExif'
+import { prepareImageForUpload } from './prepareImageForUpload'
 
 export type UploadTarget = {
   recordId?: number
@@ -14,15 +22,11 @@ export type UploadTarget = {
   forComment?: boolean
 }
 
+const UPLOAD_CONCURRENCY = 3
+
 function mediaTypeForFile(file: File): MediaType {
-  if (file.type.startsWith('video/')) return 'video'
-  if (file.type.startsWith('audio/')) return 'audio'
-  if (
-    !file.type &&
-    /\.(mp4|mov|webm|m4v)$/i.test(file.name)
-  ) {
-    return 'video'
-  }
+  if (isVideoFile(file)) return 'video'
+  if (isAudioFile(file)) return 'audio'
   return 'image'
 }
 
@@ -42,19 +46,52 @@ async function uploadPosterObject(
   return signed.object_key
 }
 
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results: R[] = new Array(items.length)
+  let next = 0
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (next < items.length) {
+        const i = next
+        next += 1
+        results[i] = await fn(items[i], i)
+      }
+    },
+  )
+  await Promise.all(workers)
+  return results
+}
+
 export async function uploadFileToWorkspace(
   workspaceId: number,
   file: File,
   target: UploadTarget = {},
 ): Promise<MediaAsset> {
-  const media_type = mediaTypeForFile(file)
-  const content_type = file.type || 'application/octet-stream'
+  let uploadFile = file
+  const rawType = mediaTypeForFile(file)
+
+  // Parse EXIF from the original before canvas re-encode strips it.
   const exif =
-    media_type === 'image' ? await parseImageExif(file) : null
+    rawType === 'image' && isImageFile(file)
+      ? await parseImageExif(file)
+      : null
+
+  if (rawType === 'image') {
+    uploadFile = await prepareImageForUpload(file)
+  }
+
+  const media_type = mediaTypeForFile(uploadFile)
+  const content_type = inferContentType(uploadFile)
 
   let thumbnail_object_key: string | undefined
   if (media_type === 'video') {
-    const poster = await extractVideoPoster(file)
+    const poster = await extractVideoPoster(uploadFile)
     if (poster) {
       try {
         thumbnail_object_key = await uploadPosterObject(
@@ -69,14 +106,14 @@ export async function uploadFileToWorkspace(
   }
 
   const signed = await presignMedia(workspaceId, {
-    filename: file.name,
+    filename: uploadFile.name,
     content_type,
     media_type,
     record_id: target.recordId,
     album_id: target.albumId,
   })
 
-  await putToUploadUrl(signed.upload_url, file, signed.headers)
+  await putToUploadUrl(signed.upload_url, uploadFile, signed.headers)
 
   return completeMedia(workspaceId, {
     record_id: target.recordId,
@@ -106,11 +143,10 @@ export async function uploadFilesToRecord(
   recordId: number,
   files: File[],
 ): Promise<MediaAsset[]> {
-  const out: MediaAsset[] = []
-  for (const file of files) {
-    out.push(await uploadFileToRecord(workspaceId, recordId, file))
-  }
-  return out
+  const prepared = filterLivePhotoCompanions(files)
+  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
+    uploadFileToRecord(workspaceId, recordId, file),
+  )
 }
 
 export async function uploadFilesToAlbum(
@@ -118,24 +154,20 @@ export async function uploadFilesToAlbum(
   albumId: number,
   files: File[],
 ): Promise<MediaAsset[]> {
-  const out: MediaAsset[] = []
-  for (const file of files) {
-    out.push(
-      await uploadFileToWorkspace(workspaceId, file, { albumId }),
-    )
-  }
-  return out
+  const prepared = filterLivePhotoCompanions(files)
+  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
+    uploadFileToWorkspace(workspaceId, file, { albumId }),
+  )
 }
 
 export async function uploadFilesToLibrary(
   workspaceId: number,
   files: File[],
 ): Promise<MediaAsset[]> {
-  const out: MediaAsset[] = []
-  for (const file of files) {
-    out.push(await uploadFileToWorkspace(workspaceId, file))
-  }
-  return out
+  const prepared = filterLivePhotoCompanions(files)
+  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
+    uploadFileToWorkspace(workspaceId, file),
+  )
 }
 
 function extensionForMime(mimeType: string): string {
