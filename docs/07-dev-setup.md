@@ -165,7 +165,7 @@ OSS_CUSTOM_DOMAIN=
 
 `workspaces/{workspace_id}/records/{record_id}/{uuid}.jpg|mp4|webm|…`
 
-前端上传前会：过滤 iOS 实况配套 MOV、HEIC→JPEG、过大图缩到长边 2560。OSS 列表缩略图仍用 `x-oss-process`。
+前端上传前会：过滤 iOS 实况配套 MOV、HEIC→JPEG、过大图缩到长边 1920。OSS 列表缩略图仍用 `x-oss-process`。
 
 OSS Bucket 需配置 CORS：允许前端源、方法 `PUT`/`GET`/`HEAD`、暴露必要头。
 

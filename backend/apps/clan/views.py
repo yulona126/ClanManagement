@@ -23,6 +23,24 @@ from rest_framework.views import APIView
 media_log = logging.getLogger("apps.clan.media")
 
 
+def _avatar_content_type(upload) -> str | None:
+    content_type = (upload.content_type or "").lower().strip()
+    if content_type.startswith("image/"):
+        return content_type
+    if content_type in {"", "application/octet-stream"}:
+        ext = Path(upload.name or "").suffix.lower()
+        return {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".heic": "image/heic",
+            ".heif": "image/heif",
+        }.get(ext)
+    return None
+
+
 class BinaryPassthroughParser(BaseParser):
     media_type = "*/*"
 
@@ -172,12 +190,18 @@ class WorkspaceAvatarView(APIView):
                 {"file": "请选择图片文件。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        content_type = (upload.content_type or "").lower()
-        if not content_type.startswith("image/"):
+        content_type = _avatar_content_type(upload)
+        if not content_type:
             return Response({"file": "仅支持图片。"}, status=status.HTTP_400_BAD_REQUEST)
-        if upload.size and upload.size > 5 * 1024 * 1024:
+        if upload.size and upload.size > 12 * 1024 * 1024:
+            media_log.warning(
+                "workspace-avatar too large ws=%s %s bytes=%s",
+                workspace_id,
+                _media_user(request),
+                upload.size,
+            )
             return Response(
-                {"file": "图片请小于 5MB。"},
+                {"file": "图片请小于 12MB（前端会自动压缩）。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -188,7 +212,16 @@ class WorkspaceAvatarView(APIView):
         object_key = f"workspaces/{ws.id}/avatar/{uuid.uuid4().hex}{ext}"
         body = upload.read()
 
-        from django.conf import settings
+        media_log.info(
+            "workspace-avatar start ws=%s %s backend=%s content_type=%s "
+            "filename=%s bytes=%s",
+            workspace_id,
+            _media_user(request),
+            settings.STORAGE_BACKEND,
+            content_type,
+            upload.name,
+            len(body),
+        )
 
         if settings.STORAGE_BACKEND == "oss":
             from .services.storage import _oss_client
@@ -208,6 +241,12 @@ class WorkspaceAvatarView(APIView):
         payload = enrich_single_workspace(
             workspace=ws,
             membership=request.membership,
+        )
+        media_log.info(
+            "workspace-avatar ok ws=%s %s key=%s",
+            workspace_id,
+            _media_user(request),
+            object_key,
         )
         return Response(WorkspaceWithMembershipSerializer(payload).data)
 

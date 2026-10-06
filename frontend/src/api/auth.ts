@@ -42,8 +42,6 @@ export async function patchMe(payload: {
 export async function uploadMyAvatar(file: File): Promise<MeResponse> {
   const form = new FormData()
   form.append('file', file)
-  const { data } = await api.post<MeResponse>('/api/auth/me/avatar/', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const { data } = await api.post<MeResponse>('/api/auth/me/avatar/', form)
   return data
 }

@@ -1,4 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#111111"/>
-  <text x="32" y="43" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="26" font-weight="400" fill="#ffffff">Cr</text>
+  <!-- Fallback tab icon; primary favicon is claner-icon-192.png -->
+  <rect width="64" height="64" rx="14" fill="#a7d8f8"/>
+  <circle cx="32" cy="26" r="12" fill="#f3d2b3" stroke="#111" stroke-width="2.2"/>
+  <path d="M20 38c4 10 20 10 24 0" fill="#fff" stroke="#111" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M26 24h4M34 24h4" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="28" cy="28" r="1.4" fill="#e8a0a0"/>
+  <circle cx="36" cy="28" r="1.4" fill="#e8a0a0"/>
 </svg>

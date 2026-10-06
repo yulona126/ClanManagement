@@ -2406,24 +2406,57 @@ a.btn-ghost:hover {
   padding: 0.55rem 0.75rem;
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
-  color: var(--color-ink-soft);
+  color: var(--color-ink);
   font-size: var(--text-sm);
+  font-weight: 500;
 }
 
 .compose-upload-spinner {
   width: 0.9rem;
   height: 0.9rem;
   border: 2px solid rgb(0 0 0 / 15%);
-  border-top-color: var(--color-accent, #3b82f6);
+  border-top-color: var(--color-accent, #111);
   border-radius: 50%;
   animation: compose-spin 0.7s linear infinite;
   flex-shrink: 0;
+}
+
+.compose-upload-spinner--lg {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-width: 3px;
 }
 
 @keyframes compose-spin {
   to {
     transform: rotate(360deg);
   }
+}
+
+.compose-publish-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 1.5rem;
+  background: rgb(255 255 255 / 82%);
+  backdrop-filter: blur(4px);
+  text-align: center;
+}
+
+.compose-publish-overlay strong {
+  font-size: var(--text-md);
+  color: var(--color-ink);
+}
+
+.compose-publish-overlay span {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+  max-width: 16rem;
 }
 
 .compose-preview-overlay {
@@ -2457,6 +2490,10 @@ a.btn-ghost:hover {
 
 .compose-form.is-publishing .compose-cancel.is-disabled {
   opacity: 0.4;
+  pointer-events: none;
+}
+
+.compose-form.is-publishing {
   pointer-events: none;
 }
 

@@ -1,5 +1,6 @@
 import { App } from 'antd'
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
   createRecord,
@@ -159,8 +160,11 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
     const workspaceId = current.id
     const pendingSnapshot = pending
     const hadMedia = pendingSnapshot.length > 0
-    setPhase({ kind: 'saving' })
-    setItemStatus({})
+    // Force paint so loading UI is visible before the first network await.
+    flushSync(() => {
+      setPhase({ kind: 'saving' })
+      setItemStatus({})
+    })
     let targetId = rid
     let recordCreated = mode === 'edit'
     try {
@@ -178,14 +182,25 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
         })
       }
       if (hadMedia) {
-        const total = pendingSnapshot.length
-        setPhase({ kind: 'uploading', completed: 0, total })
+        const filteredFiles = filterLivePhotoCompanions(
+          pendingSnapshot.map((p) => p.file),
+        )
+        const fileSet = new Set(filteredFiles)
+        const uploadItems = pendingSnapshot.filter((p) => fileSet.has(p.file))
+        if (uploadItems.length < pendingSnapshot.length) {
+          message.info('已跳过实况照片配套短视频')
+        }
+        setPhase({
+          kind: 'uploading',
+          completed: 0,
+          total: uploadItems.length,
+        })
         await uploadFilesToRecord(
           workspaceId,
           targetId,
-          pendingSnapshot.map((p) => p.file),
+          uploadItems.map((p) => p.file),
           ({ completed, total: t, index, phase: p, uploadBytes }) => {
-            const uid = pendingSnapshot[index]?.uid
+            const uid = uploadItems[index]?.uid
             if (uid) {
               setItemStatus((prev) => ({
                 ...prev,
@@ -289,6 +304,24 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
           <span className="compose-upload-spinner" aria-hidden />
           {statusHint}
         </p>
+      ) : null}
+
+      {busy ? (
+        <div className="compose-publish-overlay" role="alert" aria-live="assertive">
+          <span className="compose-upload-spinner compose-upload-spinner--lg" aria-hidden />
+          <strong>
+            {phase.kind === 'saving'
+              ? '正在保存…'
+              : phase.kind === 'uploading'
+                ? `上传中 ${phase.completed}/${phase.total}`
+                : '处理中…'}
+          </strong>
+          <span>
+            {phase.kind === 'uploading' && phase.detail
+              ? phase.detail
+              : '请勿关闭页面'}
+          </span>
+        </div>
       ) : null}
 
       <textarea

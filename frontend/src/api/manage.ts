@@ -78,7 +78,6 @@ export async function uploadManageWorkspaceAvatar(
   const { data } = await api.post<ManageWorkspace>(
     `/api/manage/workspaces/${workspaceId}/avatar/`,
     form,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
   )
   return data
 }

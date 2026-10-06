@@ -24,6 +24,24 @@ from .serializers import (
 )
 
 
+def _avatar_content_type(upload) -> str | None:
+    content_type = (upload.content_type or "").lower().strip()
+    if content_type.startswith("image/"):
+        return content_type
+    if content_type in {"", "application/octet-stream"}:
+        ext = Path(upload.name or "").suffix.lower()
+        return {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".heic": "image/heic",
+            ".heif": "image/heif",
+        }.get(ext)
+    return None
+
+
 class ManageUserListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsStaff]
 
@@ -74,12 +92,12 @@ class ManageWorkspaceAvatarView(APIView):
                 {"file": "请选择图片文件。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        content_type = (upload.content_type or "").lower()
-        if not content_type.startswith("image/"):
+        content_type = _avatar_content_type(upload)
+        if not content_type:
             return Response({"file": "仅支持图片。"}, status=status.HTTP_400_BAD_REQUEST)
-        if upload.size and upload.size > 5 * 1024 * 1024:
+        if upload.size and upload.size > 12 * 1024 * 1024:
             return Response(
-                {"file": "图片请小于 5MB。"},
+                {"file": "图片请小于 12MB（前端会自动压缩）。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -24,6 +24,37 @@ export type UploadTarget = {
 
 const UPLOAD_CONCURRENCY = 3
 
+async function probeImageSize(
+  file: File,
+): Promise<{ width: number; height: number } | null> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(file)
+      const dims = { width: bmp.width, height: bmp.height }
+      bmp.close()
+      if (dims.width && dims.height) return dims
+    } catch {
+      // fall through
+    }
+  }
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(
+        img.naturalWidth && img.naturalHeight
+          ? { width: img.naturalWidth, height: img.naturalHeight }
+          : null,
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(null)
+    }
+    img.src = url
+  })
+}
 function mediaTypeForFile(file: File): MediaType {
   if (isVideoFile(file)) return 'video'
   if (isAudioFile(file)) return 'audio'
@@ -116,7 +147,7 @@ export async function uploadFileToWorkspace(
   const rawType = mediaTypeForFile(file)
 
   // Parse EXIF from the original before canvas re-encode strips it.
-  const exif =
+  let exif =
     rawType === 'image' && isImageFile(file)
       ? await parseImageExif(file)
       : null
@@ -124,6 +155,18 @@ export async function uploadFileToWorkspace(
   if (rawType === 'image') {
     onPhase?.('compress')
     uploadFile = await prepareImageForUpload(file)
+    // Re-encode bakes pixels; refresh width/height and drop orientation.
+    if (uploadFile !== file && exif) {
+      const dims = await probeImageSize(uploadFile)
+      if (dims) {
+        exif = {
+          ...exif,
+          width: dims.width,
+          height: dims.height,
+          orientation: undefined,
+        }
+      }
+    }
   }
 
   const media_type = mediaTypeForFile(uploadFile)
