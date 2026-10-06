@@ -488,6 +488,30 @@ def author_labels_for_workspace(workspace_id: int) -> dict[int, str]:
     }
 
 
+def author_avatars_for_workspace(workspace_id: int) -> dict[int, str]:
+    """Membership avatar overrides profile avatar; empty if neither set."""
+    out: dict[int, str] = {}
+    qs = Membership.objects.filter(workspace_id=workspace_id).select_related(
+        "user__profile",
+    )
+    for m in qs:
+        profile = getattr(m.user, "profile", None)
+        url = (
+            (m.avatar_url or "").strip()
+            or ((profile.avatar_url or "").strip() if profile else "")
+        )
+        if url:
+            out[m.user_id] = url
+    return out
+
+
+def record_author_context(workspace_id: int) -> dict:
+    return {
+        "author_labels": author_labels_for_workspace(workspace_id),
+        "author_avatars": author_avatars_for_workspace(workspace_id),
+    }
+
+
 class GrowthRecordListCreateView(ListCreateAPIView):
     pagination_class = RecordPagination
 
@@ -515,7 +539,7 @@ class GrowthRecordListCreateView(ListCreateAPIView):
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
-        ctx["author_labels"] = author_labels_for_workspace(self.kwargs["workspace_id"])
+        ctx.update(record_author_context(self.kwargs["workspace_id"]))
         return ctx
 
     def create(self, request, *args, **kwargs):
@@ -527,11 +551,10 @@ class GrowthRecordListCreateView(ListCreateAPIView):
             title=write.validated_data.get("title", ""),
             content=write.validated_data.get("content", ""),
         )
-        labels = author_labels_for_workspace(self.kwargs["workspace_id"])
         return Response(
             GrowthRecordSerializer(
                 record,
-                context={"author_labels": labels},
+                context=record_author_context(self.kwargs["workspace_id"]),
             ).data,
             status=status.HTTP_201_CREATED,
         )
@@ -563,7 +586,7 @@ class GrowthRecordDetailView(APIView):
     def get_serializer_context(self):
         return {
             "request": self.request,
-            "author_labels": author_labels_for_workspace(self.kwargs["workspace_id"]),
+            **record_author_context(self.kwargs["workspace_id"]),
         }
 
     def get(self, request, *args, **kwargs):

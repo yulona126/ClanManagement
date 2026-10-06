@@ -4,7 +4,8 @@ import type { GrowthRecord } from '../../api/records'
 import type { MediaAsset } from '../../api/media'
 import { AudioPlayer } from '../../components/AudioPlayer'
 import { resolveMediaUrl } from '../media/mediaUrl'
-import { avatarInitial, formatRelativeTime } from './time'
+import { AuthorAvatar } from './AuthorAvatar'
+import { formatRelativeTime } from './time'
 
 const BODY_COLLAPSE_AT = 120
 
@@ -71,9 +72,10 @@ export function FeedCard({ record }: { record: GrowthRecord }) {
 
   return (
     <article className="feed-card">
-      <div className="feed-avatar" aria-hidden>
-        {avatarInitial(author)}
-      </div>
+      <AuthorAvatar
+        label={author}
+        avatarUrl={record.author_avatar_url}
+      />
 
       <div className="feed-card-main">
         <header className="feed-card-head">

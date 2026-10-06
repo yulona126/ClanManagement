@@ -1771,6 +1771,21 @@ a.btn-ghost:hover {
   background: var(--color-ink);
   letter-spacing: 0;
   user-select: none;
+  overflow: hidden;
+}
+
+.feed-avatar.has-photo,
+.moments-avatar.has-photo {
+  background: var(--color-bg-deep);
+  padding: 0;
+}
+
+.feed-avatar.has-photo img,
+.moments-avatar.has-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .feed-avatar-skel {
@@ -2155,6 +2170,7 @@ a.btn-ghost:hover {
   color: var(--color-ink);
   font-weight: 600;
   font-size: var(--text-md);
+  overflow: hidden;
 }
 
 .moments-post-meta {
@@ -2692,6 +2708,15 @@ a.btn-ghost:hover {
   margin-bottom: var(--space-3);
 }
 
+.manage-toolbar-search {
+  width: 100%;
+  max-width: 280px;
+}
+
+.manage-toolbar-search-icon {
+  color: var(--color-faint);
+}
+
 .manage-toolbar--split {
   justify-content: space-between;
 }
@@ -2775,6 +2800,15 @@ a.btn-ghost:hover {
   cursor: pointer;
 }
 
+.manage-ws-cover-pick:hover {
+  border-color: var(--color-ink-soft);
+}
+
+.manage-ws-cover-pick:focus-within {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
 .manage-ws-cover-pick img {
   display: block;
   width: 100%;
@@ -2782,7 +2816,7 @@ a.btn-ghost:hover {
   object-fit: cover;
 }
 
-.manage-ws-cover-pick span {
+.manage-ws-cover-pick > span {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2804,6 +2838,7 @@ a.btn-ghost:hover {
   color: #fff;
   text-align: center;
   background: linear-gradient(transparent, rgba(17, 17, 17, 0.55));
+  pointer-events: none;
 }
 
 .manage-table {

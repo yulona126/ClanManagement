@@ -7,6 +7,7 @@ export type GrowthRecord = {
   content: string
   author_id: number
   author_relation_label: string
+  author_avatar_url?: string
   created_at: string
   updated_at: string
   media: MediaAsset[]

@@ -7,6 +7,7 @@ import {
   Space,
   type ModalProps,
 } from 'antd'
+import { SearchOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 
 export function ManagePageHeader({
@@ -82,14 +83,14 @@ export function ManageToolbar({
 }) {
   return (
     <div className="manage-toolbar">
-      <Input.Search
+      <Input
         allowClear
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        onSearch={onSearch}
         placeholder={searchPlaceholder}
         aria-label="搜索"
-        style={{ maxWidth: 280 }}
+        prefix={<SearchOutlined className="manage-toolbar-search-icon" />}
+        className="manage-toolbar-search"
       />
       {extra}
       {count != null ? <span className="meta">共 {count} 条</span> : null}

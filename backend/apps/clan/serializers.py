@@ -278,6 +278,7 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
 
     author_id = serializers.IntegerField(source="author.id", read_only=True)
     author_relation_label = serializers.SerializerMethodField()
+    author_avatar_url = serializers.SerializerMethodField()
     media = MediaAssetListSerializer(many=True, read_only=True)
 
     class Meta:
@@ -288,6 +289,7 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
             "content",
             "author_id",
             "author_relation_label",
+            "author_avatar_url",
             "created_at",
             "updated_at",
             "media",
@@ -296,6 +298,7 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
             "id",
             "author_id",
             "author_relation_label",
+            "author_avatar_url",
             "created_at",
             "updated_at",
             "media",
@@ -304,6 +307,10 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
     def get_author_relation_label(self, obj: GrowthRecord) -> str:
         labels = self.context.get("author_labels") or {}
         return labels.get(obj.author_id, "")
+
+    def get_author_avatar_url(self, obj: GrowthRecord) -> str:
+        avatars = self.context.get("author_avatars") or {}
+        return avatars.get(obj.author_id, "")
 
 
 class GrowthRecordDetailSerializer(GrowthRecordSerializer):
