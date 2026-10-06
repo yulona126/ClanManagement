@@ -68,10 +68,49 @@ async function mapPool<T, R>(
   return results
 }
 
+export type UploadBatchProgress = {
+  completed: number
+  total: number
+  /** Index into the filtered file list currently finishing / starting. */
+  index: number
+  phase: 'compress' | 'start' | 'done'
+  /** Prepared upload size in bytes (after compress), when known. */
+  uploadBytes?: number
+}
+
+async function uploadBatch(
+  files: File[],
+  uploadOne: (
+    file: File,
+    onPhase?: (phase: 'compress' | 'upload', uploadBytes?: number) => void,
+  ) => Promise<MediaAsset>,
+  onProgress?: (p: UploadBatchProgress) => void,
+): Promise<MediaAsset[]> {
+  const prepared = filterLivePhotoCompanions(files)
+  const total = prepared.length
+  let completed = 0
+  return mapPool(prepared, UPLOAD_CONCURRENCY, async (file, index) => {
+    onProgress?.({ completed, total, index, phase: 'compress' })
+    const asset = await uploadOne(file, (phase, uploadBytes) => {
+      onProgress?.({
+        completed,
+        total,
+        index,
+        phase: phase === 'compress' ? 'compress' : 'start',
+        uploadBytes,
+      })
+    })
+    completed += 1
+    onProgress?.({ completed, total, index, phase: 'done' })
+    return asset
+  })
+}
+
 export async function uploadFileToWorkspace(
   workspaceId: number,
   file: File,
   target: UploadTarget = {},
+  onPhase?: (phase: 'compress' | 'upload', uploadBytes?: number) => void,
 ): Promise<MediaAsset> {
   let uploadFile = file
   const rawType = mediaTypeForFile(file)
@@ -83,11 +122,13 @@ export async function uploadFileToWorkspace(
       : null
 
   if (rawType === 'image') {
+    onPhase?.('compress')
     uploadFile = await prepareImageForUpload(file)
   }
 
   const media_type = mediaTypeForFile(uploadFile)
   const content_type = inferContentType(uploadFile)
+  onPhase?.('upload', uploadFile.size)
 
   let thumbnail_object_key: string | undefined
   if (media_type === 'video') {
@@ -131,21 +172,30 @@ export async function uploadFileToRecord(
   recordId: number,
   file: File,
   options: { forComment?: boolean } = {},
+  onPhase?: (phase: 'compress' | 'upload', uploadBytes?: number) => void,
 ): Promise<MediaAsset> {
-  return uploadFileToWorkspace(workspaceId, file, {
-    recordId,
-    forComment: options.forComment,
-  })
+  return uploadFileToWorkspace(
+    workspaceId,
+    file,
+    {
+      recordId,
+      forComment: options.forComment,
+    },
+    onPhase,
+  )
 }
 
 export async function uploadFilesToRecord(
   workspaceId: number,
   recordId: number,
   files: File[],
+  onProgress?: (p: UploadBatchProgress) => void,
 ): Promise<MediaAsset[]> {
-  const prepared = filterLivePhotoCompanions(files)
-  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
-    uploadFileToRecord(workspaceId, recordId, file),
+  return uploadBatch(
+    files,
+    (file, onPhase) =>
+      uploadFileToRecord(workspaceId, recordId, file, {}, onPhase),
+    onProgress,
   )
 }
 
@@ -153,20 +203,25 @@ export async function uploadFilesToAlbum(
   workspaceId: number,
   albumId: number,
   files: File[],
+  onProgress?: (p: UploadBatchProgress) => void,
 ): Promise<MediaAsset[]> {
-  const prepared = filterLivePhotoCompanions(files)
-  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
-    uploadFileToWorkspace(workspaceId, file, { albumId }),
+  return uploadBatch(
+    files,
+    (file, onPhase) =>
+      uploadFileToWorkspace(workspaceId, file, { albumId }, onPhase),
+    onProgress,
   )
 }
 
 export async function uploadFilesToLibrary(
   workspaceId: number,
   files: File[],
+  onProgress?: (p: UploadBatchProgress) => void,
 ): Promise<MediaAsset[]> {
-  const prepared = filterLivePhotoCompanions(files)
-  return mapPool(prepared, UPLOAD_CONCURRENCY, (file) =>
-    uploadFileToWorkspace(workspaceId, file),
+  return uploadBatch(
+    files,
+    (file, onPhase) => uploadFileToWorkspace(workspaceId, file, {}, onPhase),
+    onProgress,
   )
 }
 

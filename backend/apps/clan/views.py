@@ -1,6 +1,9 @@
+import logging
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Prefetch
 from rest_framework import status
@@ -16,6 +19,8 @@ from rest_framework.parsers import BaseParser, FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+media_log = logging.getLogger("apps.clan.media")
 
 
 class BinaryPassthroughParser(BaseParser):
@@ -643,6 +648,24 @@ def _object_key_prefix_for_complete(
     return f"workspaces/{workspace_id}/library/"
 
 
+def _upload_url_safe(url: str) -> str:
+    """Log host+path only (strip signature query)."""
+    try:
+        parts = urlsplit(url)
+        if parts.scheme and parts.netloc:
+            return f"{parts.scheme}://{parts.netloc}{parts.path}"
+        return parts.path or url[:120]
+    except Exception:
+        return url[:120]
+
+
+def _media_user(request) -> str:
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return f"user={user.pk}"
+    return "user=anonymous"
+
+
 class MediaPresignView(APIView):
     permission_classes = [IsAuthenticated, CanUploadWorkspaceMedia]
 
@@ -652,6 +675,20 @@ class MediaPresignView(APIView):
         data = ser.validated_data
         record_id = data.get("record_id")
         album_id = data.get("album_id")
+        backend = settings.STORAGE_BACKEND
+
+        media_log.info(
+            "presign start ws=%s %s backend=%s media_type=%s content_type=%s "
+            "filename=%s record_id=%s album_id=%s",
+            workspace_id,
+            _media_user(request),
+            backend,
+            data.get("media_type"),
+            data.get("content_type"),
+            data.get("filename"),
+            record_id,
+            album_id,
+        )
 
         if record_id:
             record = _get_record_in_workspace(workspace_id, record_id)
@@ -661,6 +698,11 @@ class MediaPresignView(APIView):
             object_key = make_album_object_key(workspace_id, album.id, data["filename"])
         else:
             if data["media_type"] == MediaAsset.MediaType.AUDIO:
+                media_log.warning(
+                    "presign reject audio without record ws=%s %s",
+                    workspace_id,
+                    _media_user(request),
+                )
                 raise ValidationError({"record_id": "语音必须挂在成长记录上。"})
             object_key = make_library_object_key(workspace_id, data["filename"])
 
@@ -671,7 +713,23 @@ class MediaPresignView(APIView):
                 content_type=data["content_type"],
             )
         except RuntimeError as exc:
+            media_log.exception(
+                "presign failed ws=%s %s key=%s err=%s",
+                workspace_id,
+                _media_user(request),
+                object_key,
+                exc,
+            )
             raise ValidationError({"detail": str(exc)}) from exc
+
+        media_log.info(
+            "presign ok ws=%s %s backend=%s key=%s upload=%s",
+            workspace_id,
+            _media_user(request),
+            backend,
+            object_key,
+            _upload_url_safe(payload.get("upload_url", "")),
+        )
         return Response(payload)
 
 
@@ -684,14 +742,35 @@ class MediaCompleteView(APIView):
         data = ser.validated_data
         record_id = data.get("record_id")
         album_id = data.get("album_id")
+        object_key = data["object_key"]
+        media_type = data["media_type"]
+
+        media_log.info(
+            "complete start ws=%s %s backend=%s media_type=%s key=%s "
+            "record_id=%s album_id=%s has_exif=%s thumb_key=%s",
+            workspace_id,
+            _media_user(request),
+            settings.STORAGE_BACKEND,
+            media_type,
+            object_key,
+            record_id,
+            album_id,
+            bool(data.get("exif")),
+            (data.get("thumbnail_object_key") or "")[:80] or "-",
+        )
+
         record = (
             _get_record_in_workspace(workspace_id, record_id) if record_id else None
         )
         album = _get_album_in_workspace(workspace_id, album_id) if album_id else None
 
-        object_key = data["object_key"]
         prefix = expected_key_prefix(workspace_id)
         if not object_key.startswith(prefix):
+            media_log.warning(
+                "complete deny key prefix ws=%s key=%s",
+                workspace_id,
+                object_key,
+            )
             raise PermissionDenied("object_key 不属于该 Workspace。")
         expected_mid = _object_key_prefix_for_complete(
             workspace_id=workspace_id,
@@ -699,11 +778,21 @@ class MediaCompleteView(APIView):
             album_id=album.id if album else None,
         )
         if not object_key.startswith(expected_mid):
+            media_log.warning(
+                "complete deny key mid ws=%s key=%s expected_prefix=%s",
+                workspace_id,
+                object_key,
+                expected_mid,
+            )
             raise ValidationError({"object_key": "object_key 与目标不匹配。"})
         if MediaAsset.objects.filter(object_key=object_key).exists():
+            media_log.warning(
+                "complete duplicate key ws=%s key=%s",
+                workspace_id,
+                object_key,
+            )
             raise ValidationError({"object_key": "该对象已登记。"})
 
-        media_type = data["media_type"]
         exif_fields = (
             normalize_exif(data.get("exif"))
             if media_type == MediaAsset.MediaType.IMAGE
@@ -760,6 +849,18 @@ class MediaCompleteView(APIView):
             else:
                 album.save(update_fields=["updated_at"])
 
+        media_log.info(
+            "complete ok ws=%s %s asset_id=%s media_type=%s key=%s "
+            "file_url=%s width=%s height=%s",
+            workspace_id,
+            _media_user(request),
+            asset.id,
+            asset.media_type,
+            asset.object_key,
+            _upload_url_safe(asset.file_url or ""),
+            getattr(asset, "width", None),
+            getattr(asset, "height", None),
+        )
         return Response(
             MediaAssetSerializer(asset).data,
             status=status.HTTP_201_CREATED,
@@ -783,18 +884,50 @@ class MediaLocalPutView(APIView):
         try:
             expires = int(request.query_params.get("expires", "0"))
         except ValueError as exc:
+            media_log.warning(
+                "local-put bad expires ws=%s key=%s",
+                workspace_id,
+                object_key,
+            )
             raise ValidationError({"detail": "expires 无效。"}) from exc
+
+        media_log.info(
+            "local-put start ws=%s backend=%s key=%s content_type=%s "
+            "content_length=%s",
+            workspace_id,
+            settings.STORAGE_BACKEND,
+            object_key,
+            content_type,
+            request.META.get("CONTENT_LENGTH") or request.headers.get("Content-Length"),
+        )
 
         prefix = expected_key_prefix(workspace_id)
         if not object_key.startswith(prefix):
+            media_log.warning(
+                "local-put deny key ws=%s key=%s",
+                workspace_id,
+                object_key,
+            )
             raise PermissionDenied("object_key 无效。")
         if not verify_local_put_signature(object_key, expires, content_type, signature):
+            media_log.warning(
+                "local-put bad signature ws=%s key=%s",
+                workspace_id,
+                object_key,
+            )
             raise PermissionDenied("签名无效或已过期。")
 
         body = request.data if isinstance(request.data, (bytes, bytearray)) else request.body
         if not body:
+            media_log.warning("local-put empty body ws=%s key=%s", workspace_id, object_key)
             raise ValidationError({"detail": "空请求体。"})
         save_local_object(object_key, bytes(body))
+        media_log.info(
+            "local-put ok ws=%s key=%s bytes=%s",
+            workspace_id,
+            object_key,
+            len(body),
+        )
         return Response(status=status.HTTP_200_OK)
 
 
