@@ -226,13 +226,13 @@ export async function prepareImageForUpload(
   }
 }
 
-/** Stricter prep for avatar / cover (smaller, always under multipart limits). */
+/** Stricter prep for avatar / cover (display is tiny; keep files small). */
 export function prepareAvatarForUpload(file: File): Promise<File> {
   return prepareImageForUpload(file, {
-    maxEdge: 1280,
-    reencodeAboveBytes: 400_000,
-    targetMaxBytes: 700_000,
-    jpegQuality: 0.78,
-    jpegQualityLow: 0.62,
+    maxEdge: 640,
+    reencodeAboveBytes: 120_000,
+    targetMaxBytes: 180_000,
+    jpegQuality: 0.8,
+    jpegQualityLow: 0.65,
   })
 }

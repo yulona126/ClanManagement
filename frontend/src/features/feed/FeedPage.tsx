@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pagination } from 'antd'
 import { fetchRecords, type GrowthRecord } from '../../api/records'
 import {
@@ -9,6 +9,13 @@ import {
 import { friendlyError } from '../../components/friendlyError'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 import { FeedCard } from './FeedCard'
+import {
+  getFeedPageCache,
+  getFeedViewState,
+  isFeedFresh,
+  saveFeedViewState,
+  setFeedPageCache,
+} from './feedCache'
 
 function dayKey(iso: string): string {
   try {
@@ -50,46 +57,120 @@ function groupByDay(
 
 export function FeedPage() {
   const { current, loading: wsLoading } = useWorkspace()
-  const [records, setRecords] = useState<GrowthRecord[]>([])
-  const [count, setCount] = useState(0)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const workspaceId = current?.id
+
+  const initialView =
+    workspaceId != null ? getFeedViewState(workspaceId) : { lastPage: 1, scrollY: 0 }
+  const initialPageCache =
+    workspaceId != null
+      ? getFeedPageCache(workspaceId, initialView.lastPage)
+      : null
+
+  const [page, setPage] = useState(() => initialView.lastPage)
+  const [records, setRecords] = useState<GrowthRecord[]>(
+    () => initialPageCache?.records ?? [],
+  )
+  const [count, setCount] = useState(() => initialPageCache?.count ?? 0)
+  const [loading, setLoading] = useState(() => !initialPageCache)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const restoreScrollRef = useRef(
+    initialPageCache ? initialView.scrollY : 0,
+  )
+  const pageRef = useRef(page)
 
   const canWrite =
     current?.my_role === 'owner' || current?.my_role === 'editor'
 
   useEffect(() => {
-    setPage(1)
-  }, [current?.id])
+    pageRef.current = page
+  }, [page])
+
+  // Workspace switch → restore that space's last page / scroll.
+  useEffect(() => {
+    if (workspaceId == null) return
+    const view = getFeedViewState(workspaceId)
+    const snap = getFeedPageCache(workspaceId, view.lastPage)
+    setPage(view.lastPage)
+    setRecords(snap?.records ?? [])
+    setCount(snap?.count ?? 0)
+    setLoading(!snap)
+    setError(null)
+    restoreScrollRef.current = snap ? view.scrollY : 0
+  }, [workspaceId])
 
   useEffect(() => {
     let cancelled = false
+
     async function load() {
-      if (!current) {
+      if (workspaceId == null || !current) {
         setRecords([])
         setCount(0)
+        setLoading(false)
         return
       }
-      setLoading(true)
-      setError(null)
+
+      const snap = getFeedPageCache(workspaceId, page)
+      const hasCache = snap != null && snap.fetchedAt > 0
+
+      if (hasCache) {
+        setRecords(snap.records)
+        setCount(snap.count)
+        setLoading(false)
+        if (isFeedFresh(snap)) return
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+        setError(null)
+      }
+
       try {
-        const data = await fetchRecords(current.id, page)
-        if (!cancelled) {
-          setRecords(data.results)
-          setCount(data.count)
-        }
+        const data = await fetchRecords(workspaceId, page)
+        if (cancelled) return
+        setRecords(data.results)
+        setCount(data.count)
+        setFeedPageCache(workspaceId, {
+          records: data.results,
+          count: data.count,
+          page,
+          fetchedAt: Date.now(),
+        })
+        saveFeedViewState(workspaceId, { page })
+        setError(null)
       } catch (err) {
-        if (!cancelled) setError(friendlyError(err, '加载动态失败'))
+        if (!cancelled && !hasCache) {
+          setError(friendlyError(err, '加载动态失败'))
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
     }
+
     void load()
+
     return () => {
       cancelled = true
+      if (workspaceId != null) {
+        saveFeedViewState(workspaceId, {
+          page: pageRef.current,
+          scrollY: window.scrollY,
+        })
+      }
     }
-  }, [current, page])
+  }, [current, workspaceId, page])
+
+  useLayoutEffect(() => {
+    const y = restoreScrollRef.current
+    if (y <= 0 || records.length === 0 || loading) return
+    const id = window.requestAnimationFrame(() => {
+      window.scrollTo(0, y)
+      restoreScrollRef.current = 0
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [records, page, workspaceId, loading])
 
   const groups = useMemo(() => groupByDay(records), [records])
   const totalPages = Math.max(1, Math.ceil(count / 20))
@@ -121,7 +202,7 @@ export function FeedPage() {
       ) : null}
 
       {records.length > 0 ? (
-        <div className="feed-groups">
+        <div className={`feed-groups${refreshing ? ' is-refreshing' : ''}`}>
           {groups.map((g) => (
             <section key={g.key} className="feed-day">
               <h2 className="feed-day-label">
@@ -148,7 +229,14 @@ export function FeedPage() {
             disabled={loading}
             showSizeChanger={false}
             simple
-            onChange={setPage}
+            onChange={(p) => {
+              if (workspaceId != null) {
+                saveFeedViewState(workspaceId, { page: p, scrollY: 0 })
+              }
+              restoreScrollRef.current = 0
+              window.scrollTo(0, 0)
+              setPage(p)
+            }}
           />
         </div>
       ) : null}
