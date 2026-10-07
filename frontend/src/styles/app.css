@@ -1235,6 +1235,11 @@ a.btn-ghost:hover {
   transform: scale(0.98);
 }
 
+.voice-bubble.is-failed {
+  background: #f0f0f0;
+  color: #888888;
+}
+
 .voice-bubble-icon {
   display: inline-flex;
   align-items: flex-end;

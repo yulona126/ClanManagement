@@ -7,6 +7,7 @@ type Props = {
   /** Prefer recorded duration (ms) when known; else load from media. */
   durationMs?: number | null
   className?: string
+  onPlayError?: (message: string) => void
 }
 
 const STOP_EVENT = 'claner:voice-stop'
@@ -21,22 +22,47 @@ function bubbleWidth(sec: number): number {
   return 4.5 + (t / 60) * 8.5
 }
 
+function playErrorMessage(err: unknown, src: string): string {
+  const name = err instanceof DOMException ? err.name : ''
+  const lower = src.toLowerCase()
+  if (
+    name === 'NotSupportedError' ||
+    lower.includes('.webm') ||
+    lower.includes('audio/webm')
+  ) {
+    return '当前设备无法播放该语音（多为 WebM）。请用 iPhone 录制，或换浏览器收听。'
+  }
+  if (name === 'NotAllowedError') {
+    return '浏览器拦截了播放，请再点一次。'
+  }
+  return '语音播放失败，请检查网络后重试。'
+}
+
 /**
  * WeChat-style voice bubble: tap to play through to the end; tap again to stop.
  */
-export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
+export function VoiceBubble({
+  src,
+  objectKey,
+  durationMs,
+  className,
+  onPlayError,
+}: Props) {
   const url = resolveMediaUrl(src, objectKey)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const idRef = useRef(`vb-${Math.random().toString(36).slice(2)}`)
   const [playing, setPlaying] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [durationSec, setDurationSec] = useState(() =>
     durationMs && durationMs > 0 ? durationMs / 1000 : 0,
   )
   const labelId = useId()
 
   useEffect(() => {
-    const audio = new Audio(url)
+    setFailed(false)
+    const audio = new Audio()
     audio.preload = 'metadata'
+    audio.src = url
     audioRef.current = audio
 
     const onMeta = () => {
@@ -45,6 +71,7 @@ export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
       }
     }
     const onEnded = () => setPlaying(false)
+    const onError = () => setFailed(true)
     const onStopOthers = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail
       if (detail === idRef.current) return
@@ -55,12 +82,16 @@ export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
 
     audio.addEventListener('loadedmetadata', onMeta)
     audio.addEventListener('ended', onEnded)
+    audio.addEventListener('error', onError)
     window.addEventListener(STOP_EVENT, onStopOthers)
 
     return () => {
       audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
       audio.removeEventListener('loadedmetadata', onMeta)
       audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('error', onError)
       window.removeEventListener(STOP_EVENT, onStopOthers)
       audioRef.current = null
     }
@@ -88,8 +119,11 @@ export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
       audio.currentTime = 0
       await audio.play()
       setPlaying(true)
-    } catch {
+      setFailed(false)
+    } catch (err) {
       setPlaying(false)
+      setFailed(true)
+      onPlayError?.(playErrorMessage(err, url))
     }
   }
 
@@ -99,7 +133,7 @@ export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
   return (
     <button
       type="button"
-      className={`voice-bubble${playing ? ' is-playing' : ''}${className ? ` ${className}` : ''}`}
+      className={`voice-bubble${playing ? ' is-playing' : ''}${failed ? ' is-failed' : ''}${className ? ` ${className}` : ''}`}
       style={{ width: `${widthRem}rem` }}
       onClick={() => void toggle()}
       aria-labelledby={labelId}
@@ -111,7 +145,7 @@ export function VoiceBubble({ src, objectKey, durationMs, className }: Props) {
         <i />
       </span>
       <span id={labelId} className="voice-bubble-dur">
-        {formatVoiceSeconds(sec)}
+        {failed ? '无法播放' : formatVoiceSeconds(sec)}
       </span>
     </button>
   )
