@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { formatDuration, useVoiceRecorder } from './useVoiceRecorder'
 
 type Props = {
@@ -15,15 +15,40 @@ export function HoldToTalkButton({
   const { isRecording, durationMs, error, supported, start, stop, cancel, setError } =
     useVoiceRecorder()
   const busyRef = useRef(false)
+  const activePointerRef = useRef<number | null>(null)
+  /** Avoid treating intentional release as a cancel. */
+  const finishingRef = useRef(false)
 
-  async function begin() {
+  async function begin(e: ReactPointerEvent<HTMLButtonElement>) {
     if (disabled || busyRef.current || isRecording) return
     setError(null)
+    finishingRef.current = false
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      activePointerRef.current = e.pointerId
+    } catch {
+      /* older browsers */
+    }
     await start()
   }
 
-  async function end() {
-    if (!isRecording || busyRef.current) return
+  async function end(e: ReactPointerEvent<HTMLButtonElement>) {
+    if (activePointerRef.current != null && e.pointerId !== activePointerRef.current) {
+      return
+    }
+    finishingRef.current = true
+    activePointerRef.current = null
+    try {
+      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!isRecording || busyRef.current) {
+      finishingRef.current = false
+      return
+    }
     busyRef.current = true
     try {
       const result = await stop()
@@ -32,11 +57,23 @@ export function HoldToTalkButton({
       }
     } finally {
       busyRef.current = false
+      finishingRef.current = false
     }
   }
 
+  function onCancel(e: ReactPointerEvent<HTMLButtonElement>) {
+    if (finishingRef.current) return
+    if (activePointerRef.current != null && e.pointerId !== activePointerRef.current) {
+      return
+    }
+    activePointerRef.current = null
+    if (isRecording) cancel()
+  }
+
   if (!supported) {
-    return null
+    return (
+      <p className="form-error">当前浏览器不支持录音（需 HTTPS 或 localhost）。</p>
+    )
   }
 
   return (
@@ -47,10 +84,12 @@ export function HoldToTalkButton({
         disabled={disabled}
         onPointerDown={(e) => {
           e.preventDefault()
-          void begin()
+          void begin(e)
         }}
-        onPointerUp={() => void end()}
-        onPointerCancel={() => {
+        onPointerUp={(e) => void end(e)}
+        onPointerCancel={onCancel}
+        onLostPointerCapture={() => {
+          if (finishingRef.current || busyRef.current) return
           if (isRecording) cancel()
         }}
         onContextMenu={(e) => e.preventDefault()}

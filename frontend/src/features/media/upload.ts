@@ -170,7 +170,10 @@ export async function uploadFileToWorkspace(
   }
 
   const media_type = mediaTypeForFile(uploadFile)
-  const content_type = inferContentType(uploadFile)
+  const content_type =
+    media_type === 'audio'
+      ? normalizeUploadContentType(inferContentType(uploadFile))
+      : inferContentType(uploadFile)
   onPhase?.('upload', uploadFile.size)
 
   let thumbnail_object_key: string | undefined
@@ -269,12 +272,21 @@ export async function uploadFilesToLibrary(
 }
 
 function extensionForMime(mimeType: string): string {
-  if (mimeType.includes('mp4') || mimeType.includes('m4a') || mimeType.includes('aac')) {
+  const t = mimeType.toLowerCase()
+  if (t.includes('mp4') || t.includes('m4a') || t.includes('aac')) {
     return 'm4a'
   }
-  if (mimeType.includes('ogg')) return 'ogg'
-  if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'mp3'
+  if (t.includes('ogg')) return 'ogg'
+  if (t.includes('mpeg') || t.includes('mp3')) return 'mp3'
   return 'webm'
+}
+
+/** Strip codecs=… so OSS signed Content-Type matches the PUT header. */
+function normalizeUploadContentType(mimeType: string): string {
+  const base = (mimeType || '').split(';')[0].trim().toLowerCase()
+  if (base === 'audio/aac' || base === 'audio/x-m4a') return 'audio/mp4'
+  if (base) return base
+  return 'application/octet-stream'
 }
 
 export async function uploadAudioBlobToRecord(
@@ -284,9 +296,12 @@ export async function uploadAudioBlobToRecord(
   mimeType: string,
   options: { forComment?: boolean } = {},
 ): Promise<MediaAsset> {
-  const ext = extensionForMime(mimeType)
+  const contentType = normalizeUploadContentType(
+    mimeType || blob.type || 'audio/webm',
+  )
+  const ext = extensionForMime(contentType)
   const file = new File([blob], `voice-${Date.now()}.${ext}`, {
-    type: mimeType || blob.type || 'audio/webm',
+    type: contentType,
   })
   return uploadFileToRecord(workspaceId, recordId, file, options)
 }

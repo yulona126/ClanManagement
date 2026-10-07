@@ -36,7 +36,7 @@ export function CommentsPanel({
   compact?: boolean
 }) {
   const { user } = useAuth()
-  const { modal } = App.useApp()
+  const { modal, message } = App.useApp()
   const [comments, setComments] = useState<Comment[]>([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
@@ -123,7 +123,7 @@ export function CommentsPanel({
   }
 
   async function onVoice(blob: Blob, mimeType: string, durationMs: number) {
-    if (!canPost) return
+    if (!canPost || saving) return
     setSaving(true)
     setError(null)
     try {
@@ -137,10 +137,20 @@ export function CommentsPanel({
       if (durationMs > 0) {
         setVoiceDurations((prev) => ({ ...prev, [asset.id]: durationMs }))
       }
-      await submitComment({
-        body: body.trim() || undefined,
-        audio_id: asset.id,
-      })
+      const created =
+        kind === 'record'
+          ? await postRecordComment(workspaceId, targetId, {
+              body: body.trim() || undefined,
+              audio_id: asset.id,
+            })
+          : await postMediaComment(workspaceId, targetId, {
+              body: body.trim() || undefined,
+              audio_id: asset.id,
+            })
+      setComments((prev) => [created, ...prev])
+      setBody('')
+      setShowVoice(false)
+      message.success('语音已发送')
     } catch (err) {
       setError(friendlyError(err, '语音发送失败'))
     } finally {
@@ -201,6 +211,7 @@ export function CommentsPanel({
                       src={c.audio.file_url}
                       objectKey={c.audio.object_key}
                       durationMs={voiceDurations[c.audio.id] ?? null}
+                      onPlayError={(msg) => message.warning(msg)}
                     />
                   </div>
                 ) : null}
