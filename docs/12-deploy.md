@@ -476,6 +476,8 @@ docker exec claner-pg pg_dump -U claner claner | gzip > claner-$(date +%F).sql.g
 | 上传 403 | PUT 的 Content-Type 须与预签名一致；iOS 空 MIME 已由前端推断/转 JPEG |
 | HEIC/实况失败 | 前端会转 JPEG 并丢掉配套 MOV；仍失败时让用户导出 JPEG |
 | 大图很慢 | 前端会压到长边 ≤1920；确认已部署最新前端 |
+| 回动态重复加载 | 前端 feed 缓存 60s；发布/删除会失效缓存 |
+| OSS 流量偏高 | 新上传对象带 `Cache-Control: immutable`；旧对象需控制台批量改元数据或 CDN |
 | CSRF 403 on Admin | `CSRF_TRUSTED_ORIGINS` 必须带 `https://` 域名 |
 | DisallowedHost | `DJANGO_ALLOWED_HOSTS` 漏域名 |
 | PWA 装不上 | 必须 HTTPS；检查 manifest / SW |

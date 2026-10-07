@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Button } from '../../components/ui'
-import { resolveMediaUrl } from '../media/mediaUrl'
+import { resolveAvatarUrl, resolveMediaUrl } from '../media/mediaUrl'
 import { avatarInitial, formatRelativeTime } from '../feed/time'
 import { formatBabyAge } from './age'
 import { useWorkspace } from './WorkspaceContext'
@@ -10,7 +10,10 @@ import type { Workspace } from '../../api/workspaces'
 function cardCover(ws: Workspace): { src: string | null; initial: string } {
   const avatar = (ws.avatar_url || '').trim()
   if (avatar) {
-    return { src: resolveMediaUrl(avatar), initial: avatarInitial(ws.baby_name) }
+    return {
+      src: resolveAvatarUrl(avatar, 'cover'),
+      initial: avatarInitial(ws.baby_name),
+    }
   }
   const mem = ws.latest_memory
   const cover = (mem?.cover_thumbnail_url || '').trim()

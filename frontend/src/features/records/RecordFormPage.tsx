@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../auth/AuthContext'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
+import { invalidateFeedCache } from '../feed/feedCache'
 import { uploadFilesToRecord } from '../media/upload'
 import { extractVideoPoster } from '../media/extractVideoPoster'
 import {
@@ -227,11 +228,13 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
           },
         )
       }
+      invalidateFeedCache(workspaceId)
       message.success(mode === 'create' ? '已发布' : '已保存')
       navigate(`/records/${targetId}`)
     } catch (err) {
       const msg = friendlyError(err, '发布失败，请重试')
       if (recordCreated && hadMedia && Number.isFinite(targetId)) {
+        invalidateFeedCache(workspaceId)
         navigate(`/records/${targetId}`, {
           replace: true,
           state: { uploadError: `动态已保存，但图片/视频上传失败：${msg}` },

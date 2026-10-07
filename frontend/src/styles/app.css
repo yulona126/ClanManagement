@@ -1708,6 +1708,11 @@ a.btn-ghost:hover {
   max-width: 40rem;
 }
 
+.feed-groups.is-refreshing {
+  opacity: 0.92;
+  transition: opacity 0.2s ease;
+}
+
 .feed-groups {
   display: grid;
   gap: var(--space-5);

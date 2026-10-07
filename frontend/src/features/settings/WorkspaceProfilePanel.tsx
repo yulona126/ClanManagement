@@ -8,7 +8,7 @@ import {
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { avatarInitial } from '../feed/time'
-import { resolveMediaUrl } from '../media/mediaUrl'
+import { resolveAvatarUrl } from '../media/mediaUrl'
 import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 
@@ -73,7 +73,7 @@ export function WorkspaceProfilePanel() {
 
   if (!current) return null
 
-  const coverSrc = avatarUrl.trim() ? resolveMediaUrl(avatarUrl.trim()) : ''
+  const coverSrc = resolveAvatarUrl(avatarUrl, 'lg')
   const initial = avatarInitial(babyName || current.baby_name)
 
   return (

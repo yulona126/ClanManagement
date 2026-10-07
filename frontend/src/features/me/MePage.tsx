@@ -6,7 +6,7 @@ import { patchMe, uploadMyAvatar } from '../../api/auth'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
-import { resolveMediaUrl } from '../media/mediaUrl'
+import { resolveAvatarUrl } from '../media/mediaUrl'
 
 export function MePage() {
   const { user, logout, refreshUser } = useAuth()
@@ -59,7 +59,7 @@ export function MePage() {
   }
 
   const initial = (displayName || user?.username || '?').slice(0, 1)
-  const avatarSrc = avatarUrl.trim() ? resolveMediaUrl(avatarUrl.trim()) : ''
+  const avatarSrc = resolveAvatarUrl(avatarUrl, 'md')
 
   return (
     <div className="plain-page">

@@ -18,7 +18,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { useAuth } from '../../auth/AuthContext'
-import { resolveMediaUrl } from '../media/mediaUrl'
+import { resolveAvatarUrl } from '../media/mediaUrl'
 import { formatBabyAge } from '../workspaces/age'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 
@@ -140,8 +140,7 @@ function quadraticPath(
 }
 
 function avatarSrc(url: string | null | undefined): string {
-  const t = (url || '').trim()
-  return t ? resolveMediaUrl(t) : ''
+  return resolveAvatarUrl(url, 'md')
 }
 
 function initialChar(label: string): string {

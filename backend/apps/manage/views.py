@@ -108,15 +108,9 @@ class ManageWorkspaceAvatarView(APIView):
         body = upload.read()
 
         if settings.STORAGE_BACKEND == "oss":
-            from apps.clan.services.storage import _oss_client
+            from apps.clan.services.storage import put_oss_bytes
 
-            client = _oss_client()
-            client.put_object(
-                Bucket=settings.OSS_BUCKET_NAME,
-                Key=object_key,
-                Body=body,
-                ContentType=content_type or "image/jpeg",
-            )
+            put_oss_bytes(object_key, body, content_type or "image/jpeg")
         else:
             save_local_object(object_key, body)
 

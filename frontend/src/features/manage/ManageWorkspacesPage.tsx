@@ -9,7 +9,7 @@ import {
   type ManageWorkspace,
 } from '../../api/manage'
 import { friendlyError } from '../../components/friendlyError'
-import { resolveMediaUrl } from '../media/mediaUrl'
+import { resolveAvatarUrl } from '../media/mediaUrl'
 import { prepareAvatarForUpload } from '../media/prepareImageForUpload'
 import { avatarInitial } from '../feed/time'
 import {
@@ -172,11 +172,9 @@ export function ManageWorkspacesPage() {
               dataIndex: 'avatar_url',
               width: 72,
               render: (url: string, row) => {
-                const src = (url || '').trim()
-                  ? resolveMediaUrl(url.trim())
-                  : ''
+                const src = resolveAvatarUrl(url, 'sm')
                 return src ? (
-                  <img className="manage-ws-thumb" src={src} alt="" />
+                  <img className="manage-ws-thumb" src={src} alt="" loading="lazy" />
                 ) : (
                   <span className="manage-ws-thumb manage-ws-thumb--empty">
                     {avatarInitial(row.baby_name)}

@@ -16,6 +16,7 @@ import { HoldToTalkButton } from '../../hooks/HoldToTalkButton'
 import { CommentsPanel } from '../media/CommentsPanel'
 import { MediaFilePicker } from '../media/MediaFilePicker'
 import { MediaGallery } from '../media/MediaGallery'
+import { invalidateFeedCache } from '../feed/feedCache'
 import { uploadAudioBlobToRecord, uploadFilesToRecord } from '../media/upload'
 import { AuthorAvatar } from '../feed/AuthorAvatar'
 import { formatRelativeTime } from '../feed/time'
@@ -117,6 +118,7 @@ export function RecordDetailPage() {
         setDeleting(true)
         try {
           await deleteRecord(current.id, record.id)
+          invalidateFeedCache(current.id)
           navigate('/')
         } catch (err) {
           setError(friendlyError(err, '删除失败'))
@@ -134,6 +136,7 @@ export function RecordDetailPage() {
     try {
       const added = await uploadFilesToRecord(current.id, record.id, files)
       setRecord({ ...record, media: [...record.media, ...added] })
+      invalidateFeedCache(current.id)
       setUploadWarning(null)
       setShowAddMedia(false)
     } catch (err) {
@@ -155,6 +158,7 @@ export function RecordDetailPage() {
         mimeType,
       )
       setRecord({ ...record, media: [...record.media, added] })
+      invalidateFeedCache(current.id)
     } catch (err) {
       setError(friendlyError(err, '语音上传失败'))
     } finally {

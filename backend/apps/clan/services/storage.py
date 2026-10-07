@@ -13,6 +13,8 @@ from django.conf import settings
 
 
 PRESIGN_TTL_SECONDS = 600
+# Object keys include uuid — safe for long-lived browser/CDN cache.
+OBJECT_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 
 def make_object_key(workspace_id: int, record_id: int, filename: str) -> str:
@@ -111,11 +113,16 @@ def presign_put(
 ) -> dict:
     expires_in = PRESIGN_TTL_SECONDS
     file_url = public_url(object_key)
-    headers = {"Content-Type": content_type}
+    headers = {
+        "Content-Type": content_type,
+        "Cache-Control": OBJECT_CACHE_CONTROL,
+    }
 
     if settings.STORAGE_BACKEND == "oss":
         upload_url = _oss_presign_put(object_key, content_type, expires_in)
     else:
+        # Local PUT ignores Cache-Control; nginx /media/ sets its own expires.
+        headers = {"Content-Type": content_type}
         expires = int(time.time()) + expires_in
         sig = _local_sign(object_key, expires, content_type)
         qs = urlencode(
@@ -171,7 +178,20 @@ def _oss_presign_put(object_key: str, content_type: str, expires_in: int) -> str
             "Bucket": settings.OSS_BUCKET_NAME,
             "Key": object_key,
             "ContentType": content_type,
+            "CacheControl": OBJECT_CACHE_CONTROL,
         },
         ExpiresIn=expires_in,
         HttpMethod="PUT",
+    )
+
+
+def put_oss_bytes(object_key: str, body: bytes, content_type: str) -> None:
+    """Server-side OSS PUT (avatars / covers) with long-lived Cache-Control."""
+    client = _oss_client()
+    client.put_object(
+        Bucket=settings.OSS_BUCKET_NAME,
+        Key=object_key,
+        Body=body,
+        ContentType=content_type or "image/jpeg",
+        CacheControl=OBJECT_CACHE_CONTROL,
     )
