@@ -157,6 +157,8 @@ def _oss_client():
     if not settings.OSS_ENDPOINT:
         raise RuntimeError("OSS_ENDPOINT required")
 
+    # Aliyun OSS rejects botocore's default flexible checksum trailers
+    # (STREAMING-UNSIGNED-PAYLOAD-TRAILER / Aws MultiChunkedEncoding).
     return boto3.client(
         "s3",
         aws_access_key_id=settings.OSS_ACCESS_KEY_ID,
@@ -166,6 +168,8 @@ def _oss_client():
         config=Config(
             signature_version="s3v4",
             s3={"addressing_style": "virtual"},
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
         ),
     )
 

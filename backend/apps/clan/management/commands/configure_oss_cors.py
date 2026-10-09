@@ -46,6 +46,8 @@ class Command(BaseCommand):
             config=Config(
                 signature_version="s3v4",
                 s3={"addressing_style": "virtual"},
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
             ),
         )
 
