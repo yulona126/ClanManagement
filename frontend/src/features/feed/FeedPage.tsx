@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alert, Pagination } from 'antd'
 import { fetchRecords, type GrowthRecord } from '../../api/records'
 import {
@@ -181,6 +182,17 @@ export function FeedPage() {
 
   return (
     <div className="feed-page">
+      <Link to="/timeline" className="feed-tape-entry">
+        <span className="feed-tape-entry__rule" aria-hidden="true" />
+        <span className="feed-tape-entry__text">
+          <b>成长胶片</b>
+          <span>全屏时间轴 · 逐条回放每一次第一次</span>
+        </span>
+        <span className="feed-tape-entry__go" aria-hidden="true">
+          进入 →
+        </span>
+      </Link>
+
       {loading && records.length === 0 ? <FeedSkeleton /> : null}
       {error ? (
         <Alert
