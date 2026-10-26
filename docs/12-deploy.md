@@ -72,6 +72,9 @@ docker compose up -d db
 | CI/CD | ⬜ 未做 | 可先手工 `compose up --build` |
 | 删媒体是否同步删 OSS | ⬜ 未定 | 见路线图阶段 7 |
 
+> 图片上传后显示为黑图 / 打不开：按 [`14-media-debugging.md`](./14-media-debugging.md) 排查
+> （`dbg_media` 一条命令区分「文件本身坏」和「显示链路坏」）。
+
 **Compose 架构：**
 
 ```

@@ -131,6 +131,9 @@ SIMPLE_JWT = {
 }
 
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+# 登记前校验图片真实字节（黑图排查 / 防脏数据）。
+# 会为每张图多一次对象存储读（Range 16B，约 20–50ms）。如需极致上传速度可置 0。
+MEDIA_BYTE_CHECK = os.getenv("MEDIA_BYTE_CHECK", "1").strip() not in ("0", "false", "False")
 # Empty = relative upload/media URLs (Vite proxy / same-origin). Do NOT default to 127.0.0.1
 # or phones on LAN will PUT to themselves.
 PUBLIC_API_BASE_URL = (os.getenv("PUBLIC_API_BASE_URL") or "").rstrip("/")

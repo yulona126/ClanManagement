@@ -105,7 +105,13 @@ from .services import (
     public_url,
     thumbnail_url,
 )
-from .services.storage import save_local_object, verify_local_put_signature
+from .services.storage import (
+    image_kind_matches_extension,
+    is_definitely_not_image,
+    read_object_head,
+    save_local_object,
+    verify_local_put_signature,
+)
 
 User = get_user_model()
 
@@ -831,6 +837,44 @@ class MediaCompleteView(APIView):
             if media_type == MediaAsset.MediaType.IMAGE
             else normalize_exif(None)
         )
+
+        # 登记前校验真实字节：黑图 / 打不开最常见的根因是
+        # 「对象里的内容与扩展名/声明类型不符」（前端编码失败、直传被截断、
+        # 或对象存储返回的是错误页）。这里读前 16 字节做魔数比对：
+        #   - 明显不是图片（HTML / PDF / 空）→ 直接拒绝，避免脏数据入库
+        #   - 只是与扩展名不一致 → 记 warning 放行，便于线上继续观察
+        if media_type == MediaAsset.MediaType.IMAGE and getattr(
+            settings, "MEDIA_BYTE_CHECK", True
+        ):
+            head = read_object_head(object_key)
+            trusted, actual_kind = image_kind_matches_extension(object_key, head)
+            # 只拦"确证不是图片"（空 / HTML / PDF / ZIP）：这类存进去必然是坏的，
+            # 而且用户重传就能解决。认不出或是扩展名不符的一律放行，仅记日志，
+            # 避免把用户手机上明明能看到的好照片拒之门外。
+            if not trusted and is_definitely_not_image(actual_kind, head):
+                media_log.warning(
+                    "complete reject non-image ws=%s key=%s actual=%s head=%r",
+                    workspace_id,
+                    object_key,
+                    actual_kind,
+                    head,
+                )
+                raise ValidationError(
+                    {
+                        "object_key": (
+                            "上传的文件不是有效图片（可能上传被中断）。"
+                            "请重新上传；若持续失败，请换一张照片。"
+                        )
+                    }
+                )
+            media_log.info(
+                "complete image bytes ws=%s key=%s actual=%s trusted=%s checked=%sB",
+                workspace_id,
+                object_key,
+                actual_kind,
+                trusted,
+                len(head),
+            )
         file_url = public_url(object_key)
         thumb = thumbnail_url(object_key, media_type, file_url)
 
