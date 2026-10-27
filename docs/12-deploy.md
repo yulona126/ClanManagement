@@ -72,6 +72,38 @@ docker compose up -d db
 | CI/CD | ⬜ 未做 | 可先手工 `compose up --build` |
 | 删媒体是否同步删 OSS | ⬜ 未定 | 见路线图阶段 7 |
 
+### PWA 更新（已安装的应用拿到新版本）
+
+已安装的 PWA 不会因为部署就自动换新：浏览器只在**导航**时才会去取 `sw.js`，
+而 iOS 的应用常常是从后台恢复、几天不重新加载。这里做了四件事：
+
+| 位置 | 做法 |
+| :--- | :--- |
+| `frontend/nginx.conf` | `sw.js` / `workbox-*.js` / `index.html` / `manifest.webmanifest` 加 `Cache-Control: no-cache, no-store, must-revalidate` |
+| `vite.config.ts` | `registerType: 'prompt'`（不再静默 autoUpdate）+ `cleanupOutdatedCaches` + 导航 `NetworkFirst` |
+| `src/pwa/usePwaUpdate.ts` | 打开/恢复前台、窗口聚焦、每 20 分钟主动 `registration.update()`；用户切到后台时自动应用更新 |
+| `src/pwa/PwaUpdateToast.tsx` | 右下角提示「有新版本 · 立即更新 / 稍后」 |
+
+**部署后必须验证响应头**（少一条，更新就可能永远送不到）：
+
+```bash
+curl -sI https://你的域名/sw.js | grep -i cache-control
+# 期望: Cache-Control: no-cache, no-store, must-revalidate
+curl -sI https://你的域名/ | grep -i cache-control
+# index.html 同理
+```
+
+> 如果 nginx 配置里把这几条删了，或前面挂了 CDN 并缓存了 `sw.js`，
+> 已安装的 PWA 会一直停在旧版本。CDN 上要单独给 `/sw.js` 配「不缓存」。
+
+**用户侧行为**：打开或从后台切回时自动检查；发现新版本右下角出现提示，
+点「立即更新」即刷新到新版；点「稍后」则不再打扰，等切后台时自动装上，
+下次打开就是新版本。
+
+iOS 上若仍停在旧版：从多任务里**彻底关闭** PWA 再打开一次（强制重新加载 shell）。
+
+---
+
 > 图片上传后显示为黑图 / 打不开：按 [`14-media-debugging.md`](./14-media-debugging.md) 排查
 > （`dbg_media` 一条命令区分「文件本身坏」和「显示链路坏」）。
 

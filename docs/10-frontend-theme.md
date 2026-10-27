@@ -26,6 +26,45 @@
 
 不做：霓虹、毛玻璃、多层阴影、彩色主题、紫色渐变。
 
+### 1.1 深浅主题
+
+浅色是默认；深色由 `.dark` 只重声明 `tokens.css` 的同名变量，
+**组件里不写任何深色变体**（写 `dark:` 式分支必然漏）。
+
+| 项 | 深色取值 |
+| :--- | :--- |
+| 背景 | `#0b0b0b`（`--color-bg`） |
+| 卡片 / 面板 | `#141413`（`--color-surface`） |
+| 主文字 | `#f4f4f2`（`--color-ink`） |
+| 次要文字 | `#9c9c96`（`--color-muted`） |
+| 边框 | `#26262a` / `#38383d` |
+| 反白按钮字 | `--color-on-accent`（深色下翻成黑字） |
+
+实现位置：
+
+| 文件 | 作用 |
+| :--- | :--- |
+| `src/features/theme/theme.css` | `.dark` 变量覆盖 + View Transition 的 `::view-transition-*` 规则 |
+| `src/features/theme/theme.ts` | 三态状态机、圆形扩散动效、系统配色跟随 |
+| `src/features/theme/ThemeSwitch.tsx` | `ThemeToggleButton`：顶栏的图标按钮，点一下在浅/深之间切（不弹选项） |
+| `frontend/index.html` | **首帧内联脚本**（先加 `.dark` 再绘制，避免白闪）；key 与 `theme.ts` 一致 |
+| `src/antd/theme.ts` | `antdDarkToken`：antd 的颜色 token 是写死的 hex，必须单独给深色值 |
+
+**canvas / SVG 里不要写死颜色**：`Ruler.tsx` 的刻度原先用 `ctx.strokeStyle = '#000'`，
+浅色下正常，深色主题里就是黑线画在黑底上，整把刻度尺等于消失。
+正确做法是从 CSS 变量（或继承的 `color`）读，并在主题切换时重读 ——
+见 `Ruler.tsx` 里的 `MutationObserver`。
+
+同理，凡是「底色 = `--tl-ink`」的反白按钮，文字必须用 `--color-on-accent`，
+写死 `#fff` 会在深色下变成白底白字。
+
+注意：antd 的颜色是**写死 hex**（要推导 hover/active），只切 `darkAlgorithm` 不够 ——
+`<App>` 包裹层的 `colorText`、`Input` 的 `colorBgContainer` 会压过算法，
+所以 `theme.ts` 导出 `buildAntdTheme(palette, algorithm)`，按浅/深两套调色板各构造一次。
+
+交互约定：默认 `system`（跟随系统）；用户点顶栏按钮后变成显式 light/dark，
+之后不再跟随系统。界面上**不提供**「跟随系统」选项。
+
 ---
 
 ## 2. 交互规则（固定）

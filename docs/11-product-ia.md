@@ -51,7 +51,15 @@ flowchart LR
 
 ### 11.3.1 顶栏 Nav
 
-桌面：顶栏横排链接。手机：右上角汉堡按钮弹出侧滑菜单。
+**Dynamic Island 胶囊**（`frontend/src/components/SiteMenu.tsx`）：顶栏右上角只留一个胶囊，
+显示当前栏目图标 + 名称；点开原地长出面板（图标 + 文字两列）。
+`⌘K` / `Ctrl+K` 随时开合，点外部 / Esc / 路由切换自动收起。
+
+胶囊左侧是**主题按钮**（一个图标）：点一下在浅色 / 深色之间切换，不弹任何选项。
+默认跟随系统，用户点过之后记为显式选择。
+
+为什么不再平铺：导航项涨到 7 个后，横排文字会和「品牌 / 空间」抢视觉位置；
+收进胶囊后顶栏只剩三件东西。手机端胶囊自动收成图标，面板贴右对齐。
 
 | 项 | 路由 | 说明 |
 | :--- | :--- | :--- |
@@ -89,14 +97,23 @@ flowchart LR
 
 - 数据：现有分页 `GET /api/workspaces/{id}/records/`（含嵌套 `media`）。
 - UI：按 `created_at` 的日历日分组（如「今天」「昨天」「2026-09-15」）。
-- 卡片：作者 `relation_label`、时间、正文摘要、图/视频九宫格、音频条、评论入口。
+- 卡片：作者 `relation_label`、时间、正文摘要、图/视频九宫格、音频条、评论区。
+- **评论在列表内可见（朋友圈式）**：有评论就展开最近 3 条 + 就地回复框，
+  超过 3 条给「查看全部 N 条」；没有评论时点「评论」就地展开输入框，
+  不必先进详情页。数据由列表接口的 `comment_count` / `latest_comments` 一次带出
+  （后端 `Prefetch`，不是每条动态一个请求）；旧版后端无这两个字段时退化为链接。
+- **列表位置记忆**：进入详情再返回、甚至整页刷新 / PWA 重启后，
+  仍停在原来的滚动位置（`sessionStorage` 持久化，数据与位置一起还原，
+  不会闪骨架屏、也不会重新解码图片）。
 - 交互：点卡片 → 详情；点图可进大图/照片评论（沿用现逻辑）。
 - viewer：无「发布」；**可评论**（本空间成员均可）。
 
 ### 11.3.4 壳层
 
-- **`UserShell`**：顶栏（品牌 + 宝宝 + 导航）；手机汉堡弹出侧滑菜单；**不含** staff 管理主入口。
-- **`TimelinePage`（`/timeline`）例外**：独立全屏壳，不套 UserShell；自带固定字标、开场遮罩、右侧翻页控件与索引抽屉。入口在 Feed 顶部横幅与顶栏「胶片」。
+- **`UserShell`**：顶栏（品牌 + 空间 + 胶囊导航）；**不含** staff 管理主入口。
+- **主题**：`light` / `dark` / `system` 三态，默认 `system`；切换用 View Transitions
+  的圆形扩散（从点击点长出），首帧由 `index.html` 内联脚本决定，无白闪。
+- **`TimelinePage`（`/timeline`）例外**：独立全屏壳，不套 UserShell；自带固定字标、开场遮罩、右侧翻页控件与索引抽屉。入口为顶栏「胶片」。
 
 ### 11.3.5 成长胶片（Timeline 展示页）
 
@@ -106,12 +123,14 @@ flowchart LR
 
 | 项 | 现状 |
 | :--- | :--- |
-| 数据源 | **`frontend/src/features/timeline/mockMoments.ts`（假数据）**；字段与 `GrowthRecord` 同形，接真实 API 只需替换数据源 |
-| 图片 | 内联 SVG 占位（本地生成，不依赖外网） |
+| 数据源 | **真实动态**：`frontend/src/features/timeline/moments.ts` 拉取 `/api/workspaces/{id}/records/` 全部分页，映射为轨道项。按时间**正序**排列（第 1 张是最早的记录） |
+| 图片 | 每条记录取**首张视觉素材**（优先图片，其次视频封面）；无图记录渲染为文字卡片，不塞假占位图 |
 | 结构 | 开场遮罩 → 巨字标逐字上抬 → 横向轨道（左右可无限翻阅至两端）→ 单行读数 → 底部刻度尺 |
+| 触屏手势 | 滑动 = 滚动（刻度尺与卡片都**不**拦截纵向手势）；点按刻度尺才跳转；卡片点按才开大图 |
 | 滚动 | **纵向滚动** → **GSAP ScrollTrigger** 映射为横向位移，1px 纵向 = 1px 横向。wheel 由 `Rail.tsx` 接管（`preventDefault` + `scrollBy`）：这套布局下原生 wheel 滚动并不总是响应，接管可保证各浏览器一致且不会重复滚动；`→`/`←`、PageDown、End、滚动条均可用 |
 | 轨道 | [`Rail.tsx`](../frontend/src/features/timeline/Rail.tsx)：`position: fixed` 钉在视口，只写容器 `transform`；`←` `→`（或 `J` `K`）跳转，点击图片开大图 |
-| 卡片标记 | 编号在图上沿、标签在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
+| 卡片标记 | 编号在图上沿、标签（关系称呼 + 年月）在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
+| 空 / 错误 | 无动态时开场页给「去发第一条」；取数失败显示错误文案，不白屏 |
 | 刻度尺 | [`Ruler.tsx`](../frontend/src/features/timeline/Ruler.tsx)：**canvas 逐帧绘制**（上千根 1px 竖线做成 DOM 会拖垮渲染），挂在 `gsap.ticker` 上与 ScrollTrigger 同帧；游标固定屏幕正中，标尺从它下面滑过；贴底 `bottom 6rem`（移动 8rem）；点按 / 拖动可跳转 |
 | 刻度语义 | 每月占「该月动态数 × 9」个槽位，每月第一槽为长刻度并带月份名 |
 | 单元测试面 | 见 [`scripts/devtools/README.md`](../frontend/scripts/devtools/README.md)：`measure.mjs` 可一键体检轨道几何与刻度尺 |

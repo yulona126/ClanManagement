@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { GrowthRecord } from '../../api/records'
 import type { MediaAsset } from '../../api/media'
 import { AudioPlayer } from '../../components/AudioPlayer'
 import { resolveMediaUrl } from '../media/mediaUrl'
 import { AuthorAvatar } from './AuthorAvatar'
+import { FeedComments } from './FeedComments'
 import { formatRelativeTime } from './time'
 
 const BODY_COLLAPSE_AT = 120
@@ -30,7 +31,11 @@ function VisualTile({
 
   return (
     <Link
-      to={`/records/${recordId}?media=${asset.id}`}
+      /*
+       * 不再带 ?media=：点图应该先进详情页，在详情里再点图才全屏。
+       * 之前直接带参数会让详情页一进来就弹大图，跳过了「看这条动态」本身。
+       */
+      to={`/records/${recordId}`}
       className={`feed-tile${isVideo ? ' feed-tile--video' : ''}`}
       onClick={(e) => e.stopPropagation()}
     >
@@ -40,7 +45,14 @@ function VisualTile({
         <img
           src={poster || resolveMediaUrl(asset.file_url, asset.object_key)}
           alt=""
-          loading="lazy"
+          /*
+           * 不要 lazy：从详情页返回时整个列表会重新挂载，lazy 会让可见区域外的
+           * 图片重新走一遍「等待进入视口 → 解码 → 绘制」，肉眼就是一片闪。
+           * eager + sync 让图片在首帧就完成解码，返回时不再空白。
+           * 图片本身是 400px 缩略图（见 thumbnail_url），解码开销很小。
+           */
+          loading="eager"
+          decoding="sync"
         />
       )}
       {isVideo ? (
@@ -52,8 +64,34 @@ function VisualTile({
   )
 }
 
-export function FeedCard({ record }: { record: GrowthRecord }) {
+export function FeedCard({
+  record,
+  workspaceId,
+  canComment = false,
+}: {
+  record: GrowthRecord
+  /** 评论要在卡片里就地提交，需要知道空间 */
+  workspaceId: number
+  /** 该空间成员都可以评论（后端 CanPostComment 只要求成员） */
+  canComment?: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
+  /** 无评论时点「评论」就地展开输入框 */
+  const [commentOpen, setCommentOpen] = useState(false)
+  const navigate = useNavigate()
+
+  /*
+   * 整张卡片都能点进详情（原来只有作者名和标题是链接）。
+   * 卡片里还有图片链接、评论输入框、音频条、按钮 —— 用 closest 一次性排除，
+   * 比在每个子元素上挂 stopPropagation 可靠。
+   * 选中文字时不跳转，避免用户想复制正文却被带走。
+   */
+  function onCardClick(e: React.MouseEvent<HTMLElement>) {
+    const target = e.target as HTMLElement
+    if (target.closest('a, button, input, textarea, audio, video')) return
+    if (window.getSelection()?.toString()) return
+    navigate(`/records/${record.id}`)
+  }
   const author = record.author_relation_label || `用户 #${record.author_id}`
   const visuals = record.media
     .filter((m) => m.media_type === 'image' || m.media_type === 'video')
@@ -71,7 +109,7 @@ export function FeedCard({ record }: { record: GrowthRecord }) {
       .length - visuals.length
 
   return (
-    <article className="feed-card">
+    <article className="feed-card feed-card--clickable" onClick={onCardClick}>
       <AuthorAvatar
         label={author}
         avatarUrl={record.author_avatar_url}
@@ -129,13 +167,47 @@ export function FeedCard({ record }: { record: GrowthRecord }) {
           </div>
         ) : null}
 
+        {/*
+          朋友圈式评论区：直接显示最近几条 + 就地回复。
+          旧版后端没有 latest_comments 时退回成只有「评论」链接。
+        */}
+        {record.latest_comments !== undefined ? (
+          <FeedComments
+            recordId={record.id}
+            workspaceId={workspaceId}
+            count={record.comment_count ?? record.latest_comments.length}
+            initial={record.latest_comments}
+            canPost={canComment}
+            open={commentOpen || (record.comment_count ?? 0) > 0}
+          />
+        ) : null}
+
         <footer className="feed-card-foot">
           <time className="feed-time" dateTime={record.created_at}>
             {formatRelativeTime(record.created_at)}
           </time>
-          <Link className="feed-action" to={`/records/${record.id}#comments`}>
-            评论
-          </Link>
+          {/*
+            有评论：链接到详情看完整讨论。
+            没评论：就地展开输入框 —— 家庭场景下"想留一句话"是主路径，
+            不该逼用户先进详情页。
+          */}
+          {(record.comment_count ?? 0) > 0 ? (
+            <Link className="feed-action" to={`/records/${record.id}#comments`}>
+              评论 {record.comment_count}
+            </Link>
+          ) : canComment && record.latest_comments !== undefined ? (
+            <button
+              type="button"
+              className="feed-action feed-action--button"
+              onClick={() => setCommentOpen(true)}
+            >
+              评论
+            </button>
+          ) : (
+            <Link className="feed-action" to={`/records/${record.id}#comments`}>
+              评论
+            </Link>
+          )}
         </footer>
       </div>
     </article>

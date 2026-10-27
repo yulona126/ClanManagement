@@ -26,7 +26,7 @@ npm run dev          # http://127.0.0.1:5180
 
 ### 免登录跑起来
 
-受保护路由，正常流程是：`/login` → 选空间 → 点顶栏「胶片」或 Feed 顶部横幅。
+受保护路由，正常流程是：`/login` → 选空间 → 点顶栏「胶片」。
 
 **没有后端时**（这台机器上 8001 端口是别的服务）走假 API：
 
@@ -52,7 +52,7 @@ location.href = '/timeline'
 http://127.0.0.1:5180/timeline
 ```
 
-受保护路由，正常流程是：`/login` → 选空间 → 点顶栏「胶片」或 Feed 顶部横幅。
+受保护路由，正常流程是：`/login` → 选空间 → 点顶栏「胶片」。
 
 **没有后端时**（这台机器上 8001 端口是别的服务）走假 API：
 
@@ -79,7 +79,7 @@ location.href = '/timeline'
 | 开场遮罩 / 字标动画 | [`TimelinePage.tsx`](../src/features/timeline/TimelinePage.tsx) 的 `enter()`、`introOpen` |
 | 筛选逻辑 | 同文件 `filtered`（`useMemo`），按 `monthFilter` / `tagFilter` |
 | 滚动高亮当前条 | 同文件 `activeIndex` 的 `IntersectionObserver` |
-| 假数据改内容 | [`mockMoments.ts`](../src/features/timeline/mockMoments.ts) 的 `SEEDS` 数组 |
+| 让时间轴有内容 | 先跑 `manage.py seed_demo_content` 灌演示动态（见 `docs/07-dev-setup.md`） |
 | 视觉 | [`timeline.css`](../src/features/timeline/timeline.css)，类名 `tl-` 前缀 |
 
 ### DevTools 里几个好用的

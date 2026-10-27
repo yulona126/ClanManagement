@@ -6,7 +6,7 @@ React + Vite + TypeScript + PWA。
 
 - **阶段 0–2.5 ✅**：含管理台 `/manage`、Owner 邀请、App 壳 UI  
 - **U1–U4 ✅**：双端分壳、朋友圈 Feed、管理台多页  
-- **展示页 ✅**：成长胶片 `/timeline`（沉浸式时间轴，当前用假数据）  
+- **展示页 ✅**：成长胶片 `/timeline`（沉浸式时间轴，读真实动态）  
 - **主题**：[`docs/10-frontend-theme.md`](../docs/10-frontend-theme.md)
 - **UI 库**：antd（按需 ESM 引入，见下方）
 
@@ -58,14 +58,14 @@ npm run dev
 | `src/api/` | HTTP 客户端与接口 |
 | `src/auth/` | token、AuthContext、RequireAuth |
 | `src/features/auth/` | 登录页、登录后首页 |
-| `src/features/timeline/` | 成长胶片展示页 `/timeline`（`mockMoments.ts` 假数据、`Rail.tsx` 横向轨道、`Ruler.tsx` canvas 刻度尺） |
+| `src/features/timeline/` | 成长胶片展示页 `/timeline`（`moments.ts` 取数映射、`Rail.tsx` 横向轨道、`Ruler.tsx` canvas 刻度尺） |
 | `src/features/workspaces/` | WorkspaceContext、切换器、成员面板 |
 | `src/routes/` | 路由表 |
 | `src/pwa/` | SW 更新提示 |
 
 ## 展示页与本地调试
 
-成长胶片 `/timeline` 目前跑在假数据上，**不依赖后端**即可完整调试。
+成长胶片 `/timeline` 读真实动态，需要后端可用；没有数据的空间会提示「还没有动态」。
 完整说明见 [`scripts/devtools/README.md`](./scripts/devtools/README.md)，速查：
 
 | 方式 | 命令 / 地址 | 用途 |

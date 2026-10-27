@@ -162,7 +162,12 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: clamp(1.25rem, 3vw, 3rem);
+  /* 刘海屏 / home indicator 安全区（用 max 兼容不支持 env 的浏览器） */
+  padding:
+    max(clamp(1.25rem, 3vw, 3rem), env(safe-area-inset-top, 0px))
+    max(clamp(1.25rem, 3vw, 3rem), env(safe-area-inset-right, 0px))
+    max(clamp(1.25rem, 3vw, 3rem), env(safe-area-inset-bottom, 0px))
+    max(clamp(1.25rem, 3vw, 3rem), env(safe-area-inset-left, 0px));
   background: var(--tl-bg);
   color: var(--tl-ink);
   transition:
@@ -267,7 +272,8 @@
   border: 1px solid var(--tl-ink);
   border-radius: 0.4rem;
   background: var(--tl-ink);
-  color: #fff;
+  /* 深色主题下 --tl-ink 是近白色，写死 #fff 就成了白底白字 */
+  color: var(--color-on-accent);
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -444,7 +450,7 @@
 .tl-chip.is-active {
   background: var(--tl-ink);
   border-color: var(--tl-ink);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .tl-chip small {
@@ -733,7 +739,7 @@
   border: none;
   border-radius: 50%;
   background: var(--tl-ink);
-  color: #fff;
+  color: var(--color-on-accent);
   cursor: pointer;
   transition: background-color 0.3s var(--tl-ease-soft);
 }
@@ -880,7 +886,7 @@
 
 .tl-archive__close:hover {
   background: var(--tl-ink);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .tl-archive__body {
@@ -1068,7 +1074,7 @@
   border: 1px solid var(--tl-ink);
   border-radius: 999px;
   background: var(--tl-ink);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -1080,7 +1086,7 @@
 .tl-dock button:hover,
 .tl-dock a:hover {
   background: var(--color-ink-soft);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .tl-dock__ghost {
@@ -1242,7 +1248,8 @@
 
 /* 轨道模式下字标尺寸收小：参考站 105px @1500px 视口，这里取同等视觉占比 */
 .tl-wordmark--rail {
-  top: 1.25rem;
+  /* 刘海屏上避开状态栏 */
+  top: calc(env(safe-area-inset-top, 0px) + 1.25rem);
   z-index: 30;
   width: min(90vw, 40rem);
 }

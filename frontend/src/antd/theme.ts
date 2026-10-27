@@ -1,12 +1,24 @@
 import { theme, type ThemeConfig } from 'antd'
-import { clanerPalette as c, clanerRadius as r, clanerType as t } from './palette'
+import {
+  clanerDarkPalette,
+  clanerPalette,
+  clanerRadius as r,
+  clanerType as t,
+} from './palette'
 
 /**
  * Global antd theme — Minimal White (docs/10-frontend-theme.md).
- * Seed colors mirror `tokens.css` / `palette.ts`. Change palette once, both stay aligned.
+ *
+ * antd 需要 hex 才能推导 hover/active，所以颜色是**写死**的；
+ * 这也意味着深色不能只切 algorithm —— token 与各组件里的颜色会压过算法。
+ * 因此这里做成按调色板构造，浅色 / 深色各跑一遍同一套规则。
  */
-export const antdTheme: ThemeConfig = {
-  algorithm: theme.defaultAlgorithm,
+export function buildAntdTheme(
+  c: typeof clanerPalette | typeof clanerDarkPalette,
+  algorithm: ThemeConfig['algorithm'],
+): ThemeConfig {
+  return {
+  algorithm,
   cssVar: {
     key: 'claner',
   },
@@ -357,4 +369,17 @@ export const antdTheme: ThemeConfig = {
       separatorColor: c.faint,
     },
   },
+  }
 }
+
+/** 浅色（默认） */
+export const antdTheme: ThemeConfig = buildAntdTheme(
+  clanerPalette,
+  theme.defaultAlgorithm,
+)
+
+/** 深色：同一套规则，换调色板 + darkAlgorithm */
+export const antdDarkTheme: ThemeConfig = buildAntdTheme(
+  clanerDarkPalette,
+  theme.darkAlgorithm,
+)

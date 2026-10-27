@@ -1,5 +1,20 @@
 # 排查「上传后图片是黑图 / 打不开」
 
+> **已确认的一例（2026-10，线上 hellohexia.com）**
+> 现象：部分照片显示全黑。
+> 判定：**存储里的原图本身就是纯黑**，不是显示链路问题。
+> 证据：`workspaces/1/records/56/28e7646f….jpg` —— 1440×1920、16957 字节、
+> 276 万像素**全部为 (0,0,0)**、颜色数 = 1、无 EXIF。
+> 根因：前端重编码走了 `createImageBitmap(src, {resizeWidth, resizeHeight})`，
+> WebKit 对部分大图/带 EXIF 方向的照片会返回"空位图"，画到 canvas 上什么都没画，
+> canvas 又是 `alpha:false`（黑底），`toBlob` 出来的就是**尺寸正确但全黑**的 JPEG。
+> 修复：[`prepareImageForUpload.ts`](../frontend/src/features/media/prepareImageForUpload.ts)
+> 不再用 `createImageBitmap` 缩放（改由 canvas 的 `drawImage` 缩放），
+> 并在编码后检查「是否每个采样点都是 0」，是全黑就回退原图 / 报错。
+> **注意：这类图片无法修复**——浏览器只上传了重编码后的黑图，原始像素从未离开用户手机，
+> 只能请用户从相册重新上传。
+
+
 线上出现黑图时，**先分清是哪一类**，因为两类原因的修法完全不同：
 
 | 类别 | 现象 | 根因位置 |
@@ -39,6 +54,8 @@ docker compose logs --since 2h api | grep -E "presign (start|ok|failed)|complete
 
 - `complete image bytes ... actual=html-or-json` → 对象里存的是 HTML（错误页），A 类
 - `complete image bytes ... actual=unknown trusted=false` → 字节认不出，可能被截断，A 类
+- `complete suspicious flat image ...` → **bytes/px 极低**（< 0.02，线上黑图实测 0.006），
+  高度疑似全黑图；只是告警不拦截，配合前端守卫使用
 - `presign start ... content_type=image/heic` 而对象后缀是 `.heic` → iOS 没转换成功，很多浏览器解不了
 - `complete ok ... width=None height=None` → 前端解码就失败了，图大概率是坏的
 - 日志里完全没有某次上传的 `complete` → 直传（PUT）阶段就失败了，查 CORS / 网络
@@ -112,6 +129,54 @@ Range 读（约 20–50ms）；如果更在意上传速度，可在 `.env` 里�
 | **CORS** | 上传阶段就失败（PUT 报错） | `docker compose exec api python manage.py configure_oss_cors --origin https://你的域名` |
 
 ---
+
+## 4.5 单独查一张图：`scripts/check_image.py`
+
+日志里拿到 `object_key` 或 URL 后，可以直接判死因（**服务端抓字节，不受 CORS 限制**）：
+
+```bash
+python3 scripts/check_image.py "https://<bucket>.<endpoint>/<object_key>"
+```
+
+会依次报：HTTP 状态 / Content-Type / 长度、真实字节类型（魔数）、
+能否解码、尺寸、**平均亮度**，并自动再测一次 `?x-oss-process=image/resize,w_400`
+（缩略图走的就是这条路径）。
+
+判定对照：
+
+| 输出 | 结论 |
+| :--- | :--- |
+| 原图亮度 ≈ 0、颜色数 1 | 存储里就是黑图 → 上传阶段坏了（见文首那一例） |
+| 原图正常、缩略图偏黑/报错 | OSS 图片处理对该格式不适用 |
+| Content-Type 非 `image/*` | 直传 headers 与真实类型不一致 |
+| 返回 `html`/`json` | 对象里是错误页（多半直传 URL 过期） |
+
+需要 Pillow 才能测亮度（项目未内置，本地临时装即可）：
+
+```bash
+python3 -m pip install pillow
+# 或直接用后端 venv：
+backend/.venv/bin/python scripts/check_image.py <url>
+```
+
+### 批量收集所有图片 URL
+
+想知道「到底有多少张黑图」，需要把全部图片 URL 拿到手。在浏览器控制台跑：
+
+```text
+1. 打开 http://localhost:5180/ 并用线上账号登录（配了 DEV_API_TARGET 时即线上数据）
+2. DevTools → Console → 粘贴 scripts/collect_media_urls.js 全部内容 → 回车
+3. URL 列表会打印并复制到剪贴板
+```
+
+然后一次性判定：
+
+```bash
+backend/.venv/bin/python scripts/check_image.py --file urls.txt
+```
+
+输出末尾会汇总「检查 N 张，有问题 M 张」，并逐条给出亮度/类型/缩略图结果。
+只做 GET，不会改任何数据。
 
 ## 5. 快速定位清单
 

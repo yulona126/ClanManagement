@@ -1,15 +1,41 @@
 import { VitePWA } from 'vite-plugin-pwa'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { mockApiPlugin } from './vite.mock-api.ts'
+import { apiGuardPlugin } from './vite.api-guard.ts'
 
-export default defineConfig({
+/**
+ * 后端地址可配置。
+ *
+ * 本机常同时跑多个项目，Django 默认的 8001 很可能被别的容器占用
+ * （本项目开发时就被另一个 todolist 占过）。写死端口会导致
+ * `/api` 打到别人的服务上、表现为「前端连不上后端」。
+ *
+ * 优先级：环境变量 DEV_API_TARGET > frontend/.env 里的同名项 > 默认 8001
+ * 用法：`DEV_API_TARGET=http://127.0.0.1:8002 npm run dev`
+ */
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const devApiTarget = env.DEV_API_TARGET || 'http://127.0.0.1:8001'
+  const devApiReadonly = ['1', 'true'].includes(
+    String(env.DEV_API_READONLY ?? '').toLowerCase(),
+  )
+
+  return {
   plugins: [
     react(),
     // 开发期假 API（仅 apply: 'serve'，生产构建不含）
     mockApiPlugin(),
+    // 连远端 API 时的告警 + 只读护栏（仅 apply: 'serve'）
+    apiGuardPlugin({ target: devApiTarget, readonly: devApiReadonly }),
     VitePWA({
-      registerType: 'autoUpdate',
+      /*
+       * 用 prompt 而不是 autoUpdate：
+       * autoUpdate 会让新 SW 立刻 skipWaiting 并接管，页面内容却还是旧的
+       * （或者在用户正填表单时突然重载）。改成 prompt 后，
+       * 由 PwaUpdateToast 在合适的时机提示/应用更新。
+       */
+      registerType: 'prompt',
       includeAssets: [
         'favicon.svg',
         'icons/claner-icon-192.png',
@@ -55,6 +81,23 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/media/],
+        // 清掉上一版 precache，避免旧 hash 资源长期残留
+        cleanupOutdatedCaches: true,
+        /*
+         * 不缓存 HTML 导航：PWA 里最容易"看着更新了、其实还是旧页面"的就是这里。
+         * 资源本身带 hash，缓存住没问题；入口必须每次走网络（离线时由 precache 兜底）。
+         */
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'claner-pages',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+        ],
       },
       // 开发期关掉 SW，避免缓存旧 JS 导致「改了没生效」
       devOptions: {
@@ -71,13 +114,14 @@ export default defineConfig({
     // 同源代理：手机只访问 :5180，不必直连后端端口
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://127.0.0.1:8001',
+        target: devApiTarget,
         changeOrigin: true,
       },
     },
   },
+  }
 })

@@ -6,6 +6,7 @@ import { avatarInitial, formatRelativeTime } from '../feed/time'
 import { formatBabyAge } from './age'
 import { useWorkspace } from './WorkspaceContext'
 import type { Workspace } from '../../api/workspaces'
+import { InlineLoader } from '../../components/PageLoader'
 
 function cardCover(ws: Workspace): { src: string | null; initial: string } {
   const avatar = (ws.avatar_url || '').trim()
@@ -134,7 +135,7 @@ export function WorkspacePickerPage() {
         </header>
 
         {error ? <p className="form-error">{error}</p> : null}
-        {loading ? <p className="meta">加载中…</p> : null}
+        {loading ? <InlineLoader label="加载空间" /> : null}
 
         {!loading && workspaces.length === 0 ? (
           <div className="ws-picker-empty">

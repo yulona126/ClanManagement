@@ -61,6 +61,9 @@ def public_url(object_key: str) -> str:
 def thumbnail_url(object_key: str, media_type: str, file_url: str | None = None) -> str:
     """Build a display URL for list/grid covers (image resize or video snapshot)."""
     url = file_url or public_url(object_key)
+    # 相对路径（本地 MEDIA_URL，如 /media/...）不是 OSS 对象，不能拼图片处理参数
+    if not url.lower().startswith(("http://", "https://")):
+        return url if media_type == "image" else ""
     if settings.STORAGE_BACKEND != "oss":
         # Local: images use the file itself; video covers are uploaded separately.
         return url if media_type == "image" else ""
@@ -254,8 +257,14 @@ def sniff_image_kind(head: bytes) -> str:
     return "unknown"
 
 
-def read_object_head(object_key: str, size: int = 16) -> bytes:
-    """读对象开头若干个字节，用于登记前的魔数校验。失败返回 b""。"""
+def read_object_probe(object_key: str, size: int = 16) -> tuple[bytes, int | None]:
+    """
+    读对象开头若干字节，并尽量取回对象总大小。
+
+    OSS 的 Range 请求会带 `ContentRange: bytes 0-15/<total>`，
+    所以总大小是**顺带**拿到的，不需要额外一次 HEAD。
+    返回 (前若干字节, 总大小或 None)。
+    """
     try:
         if settings.STORAGE_BACKEND == "oss":
             client = _oss_client()
@@ -265,14 +274,44 @@ def read_object_head(object_key: str, size: int = 16) -> bytes:
                 Range=f"bytes=0-{size - 1}",
             )
             try:
-                return obj["Body"].read()
+                head = obj["Body"].read()
             finally:
                 obj["Body"].close()
+            total = None
+            content_range = obj.get("ContentRange") or ""
+            if "/" in content_range:
+                try:
+                    total = int(content_range.rsplit("/", 1)[1])
+                except ValueError:
+                    total = None
+            return head, total
         path = Path(settings.MEDIA_ROOT) / object_key
         with path.open("rb") as fh:
-            return fh.read(size)
+            return fh.read(size), path.stat().st_size
     except Exception:  # noqa: BLE001 - 校验失败不应阻断上传，交给调用方记录
-        return b""
+        return b"", None
+
+
+def read_object_head(object_key: str, size: int = 16) -> bytes:
+    """兼容旧调用：只取开头字节。"""
+    head, _ = read_object_probe(object_key, size)
+    return head
+
+
+def looks_like_flat_black(size_bytes: int | None, width: int | None, height: int | None) -> bool:
+    """
+    用「字节 / 像素」粗判是否可能是纯色黑图。
+
+    JPEG 的黑图压缩率极高：线上实际案例 1440×1920、16957 字节，
+    即 0.006 B/px；而正常照片通常在 0.05–0.3 B/px。
+    这里只在 < 0.02 时报警（不拦截），避免误伤本身就很平的画面。
+    """
+    if not size_bytes or not width or not height:
+        return False
+    pixels = width * height
+    if pixels <= 0:
+        return False
+    return size_bytes / pixels < 0.02
 
 
 # 确证"不是图片"的类型：只有这些才拒绝入库

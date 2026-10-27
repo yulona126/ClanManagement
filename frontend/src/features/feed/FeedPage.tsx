@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Alert, Pagination } from 'antd'
 import { fetchRecords, type GrowthRecord } from '../../api/records'
 import {
@@ -56,15 +55,38 @@ function groupByDay(
   return [...map.entries()].map(([key, items]) => ({ key, items }))
 }
 
+/** 上次进入的空间 id —— 上下文还没加载完时先用它取缓存，避免白屏。 */
+function storedWorkspaceId(): number | null {
+  try {
+    const raw = window.localStorage.getItem('claner.currentWorkspaceId')
+    const id = raw ? Number(raw) : NaN
+    return Number.isFinite(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 export function FeedPage() {
   const { current, loading: wsLoading } = useWorkspace()
   const workspaceId = current?.id
 
+  /*
+   * 先用「上次的空间」读缓存。
+   *
+   * 关键：手机侧滑返回在 iOS 上常常是**整页重新加载**（不是 SPA 返回），
+   * 这时 WorkspaceContext 要等 /api/workspaces/ 回来才知道 current，
+   * 若此刻才去读缓存，首帧就是骨架屏 —— 用户看到的就是「闪一下」。
+   * 用 localStorage 里记的 id 提前读，列表可以在首帧就带着内容出来。
+   */
+  const bootWorkspaceId = workspaceId ?? storedWorkspaceId()
+
   const initialView =
-    workspaceId != null ? getFeedViewState(workspaceId) : { lastPage: 1, scrollY: 0 }
+    bootWorkspaceId != null
+      ? getFeedViewState(bootWorkspaceId)
+      : { lastPage: 1, scrollY: 0 }
   const initialPageCache =
-    workspaceId != null
-      ? getFeedPageCache(workspaceId, initialView.lastPage)
+    bootWorkspaceId != null
+      ? getFeedPageCache(bootWorkspaceId, initialView.lastPage)
       : null
 
   const [page, setPage] = useState(() => initialView.lastPage)
@@ -163,14 +185,41 @@ export function FeedPage() {
     }
   }, [current, workspaceId, page])
 
+  /*
+   * 同步恢复滚动位置（不要 rAF）。
+   * rAF 会先让浏览器画一帧顶部，再跳到旧位置 —— 用户看到的就是「闪一下 + 回顶」。
+   * useLayoutEffect 在 paint 之前执行，直接落到正确位置。
+   */
+  /*
+   * 页面被刷新 / 关闭 / 切后台时，React 的 effect cleanup 不保证执行，
+   * 所以额外在 pagehide、visibilitychange 里存一次位置。
+   * 没有这一步，用户按 F5 或从 PWA 杀进程后回来，就还是回到顶部。
+   */
+  useEffect(() => {
+    if (workspaceId == null) return
+    const save = () => {
+      saveFeedViewState(workspaceId, {
+        page: pageRef.current,
+        scrollY: window.scrollY,
+      })
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') save()
+    }
+    window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      save()
+      window.removeEventListener('pagehide', save)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [workspaceId])
+
   useLayoutEffect(() => {
     const y = restoreScrollRef.current
     if (y <= 0 || records.length === 0 || loading) return
-    const id = window.requestAnimationFrame(() => {
-      window.scrollTo(0, y)
-      restoreScrollRef.current = 0
-    })
-    return () => window.cancelAnimationFrame(id)
+    window.scrollTo(0, y)
+    restoreScrollRef.current = 0
   }, [records, page, workspaceId, loading])
 
   const groups = useMemo(() => groupByDay(records), [records])
@@ -182,17 +231,6 @@ export function FeedPage() {
 
   return (
     <div className="feed-page">
-      <Link to="/timeline" className="feed-tape-entry">
-        <span className="feed-tape-entry__rule" aria-hidden="true" />
-        <span className="feed-tape-entry__text">
-          <b>成长胶片</b>
-          <span>全屏时间轴 · 逐条回放每一次第一次</span>
-        </span>
-        <span className="feed-tape-entry__go" aria-hidden="true">
-          进入 →
-        </span>
-      </Link>
-
       {loading && records.length === 0 ? <FeedSkeleton /> : null}
       {error ? (
         <Alert
@@ -223,7 +261,11 @@ export function FeedPage() {
               <ul className="feed-list">
                 {g.items.map((r) => (
                   <li key={r.id}>
-                    <FeedCard record={r} />
+                    <FeedCard
+                      record={r}
+                      workspaceId={workspaceId ?? 0}
+                      canComment={current?.my_role != null}
+                    />
                   </li>
                 ))}
               </ul>

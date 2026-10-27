@@ -35,7 +35,10 @@ def _cover_for_record(record: GrowthRecord) -> tuple[str, str]:
     )
     if asset is None:
         return "", ""
-    file_url = public_url(asset.object_key)
+    # 优先用记录里已存的 URL：它才是上传时实际落库的地址。
+    # 只用 object_key 现拼会在两种情况下出错：本地种子数据（/media/...）、
+    # 以及切换 OSS 自定义域名后历史数据。
+    file_url = (asset.file_url or "").strip() or public_url(asset.object_key)
     thumb = thumbnail_url(asset.object_key, asset.media_type, file_url)
     if not thumb:
         thumb = (asset.thumbnail_url or "").strip()

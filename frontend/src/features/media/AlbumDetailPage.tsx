@@ -1,5 +1,5 @@
 import { App, Dropdown, Input, Modal } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
   addAlbumItems,
@@ -11,12 +11,14 @@ import {
   type Album,
 } from '../../api/albums'
 import { fetchMediaLibrary, type MediaAsset } from '../../api/media'
+import { useScrollMemory } from '../common/useScrollMemory'
 import { EmptyState } from '../../components/EmptyState'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 import { PhotoWall } from './PhotoWall'
 import { uploadFilesToAlbum } from './upload'
+import { InlineLoader } from '../../components/PageLoader'
 
 export function AlbumDetailPage() {
   const { albumId } = useParams()
@@ -32,6 +34,12 @@ export function AlbumDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState(false)
+  // 从大图返回时保留位置
+  const albumKey = useMemo(
+    () => `claner.album.${current?.id ?? 0}.${albumId ?? 0}`,
+    [current?.id, albumId],
+  )
+  useScrollMemory(albumKey, !loading && items.length > 0)
   const [editTitle, setEditTitle] = useState('')
   const [picking, setPicking] = useState(false)
   const [library, setLibrary] = useState<MediaAsset[]>([])
@@ -174,7 +182,7 @@ export function AlbumDetailPage() {
     return <Navigate to="/album" replace />
   }
 
-  if (wsLoading || loading) return <p className="meta">加载中…</p>
+  if (wsLoading || loading) return <InlineLoader label="加载相册" />
 
   if (error || !album) {
     return (
