@@ -2,6 +2,7 @@ import { App } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchMediaLibrary, type MediaAsset } from '../../api/media'
+import { useScrollMemory } from '../common/useScrollMemory'
 import { EmptyState } from '../../components/EmptyState'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
@@ -22,6 +23,8 @@ export function AllPhotosPage() {
   const [error, setError] = useState<string | null>(null)
   const [bucketKey, setBucketKey] = useState('all')
   const [reloadKey, setReloadKey] = useState(0)
+  // 从照片详情返回时回到原来的位置（不再跳回顶部）
+  useScrollMemory(`claner.photos.${current?.id ?? 0}.${bucketKey}`, !loading && items.length > 0)
 
   const canEdit =
     current?.my_role === 'owner' || current?.my_role === 'editor'

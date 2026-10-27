@@ -163,14 +163,41 @@ export function FeedPage() {
     }
   }, [current, workspaceId, page])
 
+  /*
+   * 同步恢复滚动位置（不要 rAF）。
+   * rAF 会先让浏览器画一帧顶部，再跳到旧位置 —— 用户看到的就是「闪一下 + 回顶」。
+   * useLayoutEffect 在 paint 之前执行，直接落到正确位置。
+   */
+  /*
+   * 页面被刷新 / 关闭 / 切后台时，React 的 effect cleanup 不保证执行，
+   * 所以额外在 pagehide、visibilitychange 里存一次位置。
+   * 没有这一步，用户按 F5 或从 PWA 杀进程后回来，就还是回到顶部。
+   */
+  useEffect(() => {
+    if (workspaceId == null) return
+    const save = () => {
+      saveFeedViewState(workspaceId, {
+        page: pageRef.current,
+        scrollY: window.scrollY,
+      })
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') save()
+    }
+    window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      save()
+      window.removeEventListener('pagehide', save)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [workspaceId])
+
   useLayoutEffect(() => {
     const y = restoreScrollRef.current
     if (y <= 0 || records.length === 0 || loading) return
-    const id = window.requestAnimationFrame(() => {
-      window.scrollTo(0, y)
-      restoreScrollRef.current = 0
-    })
-    return () => window.cancelAnimationFrame(id)
+    window.scrollTo(0, y)
+    restoreScrollRef.current = 0
   }, [records, page, workspaceId, loading])
 
   const groups = useMemo(() => groupByDay(records), [records])
@@ -223,7 +250,11 @@ export function FeedPage() {
               <ul className="feed-list">
                 {g.items.map((r) => (
                   <li key={r.id}>
-                    <FeedCard record={r} />
+                    <FeedCard
+                      record={r}
+                      workspaceId={workspaceId ?? 0}
+                      canComment={current?.my_role != null}
+                    />
                   </li>
                 ))}
               </ul>

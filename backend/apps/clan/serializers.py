@@ -280,6 +280,9 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
     author_relation_label = serializers.SerializerMethodField()
     author_avatar_url = serializers.SerializerMethodField()
     media = MediaAssetListSerializer(many=True, read_only=True)
+    # 朋友圈式：列表里直接带出评论，避免每条动态单独请求一次（20 条 = 20 次）
+    comment_count = serializers.SerializerMethodField()
+    latest_comments = serializers.SerializerMethodField()
 
     class Meta:
         model = GrowthRecord
@@ -293,6 +296,8 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "media",
+            "comment_count",
+            "latest_comments",
         )
         read_only_fields = (
             "id",
@@ -302,6 +307,8 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "media",
+            "comment_count",
+            "latest_comments",
         )
 
     def get_author_relation_label(self, obj: GrowthRecord) -> str:
@@ -311,6 +318,43 @@ class GrowthRecordSerializer(serializers.ModelSerializer):
     def get_author_avatar_url(self, obj: GrowthRecord) -> str:
         avatars = self.context.get("author_avatars") or {}
         return avatars.get(obj.author_id, "")
+
+    def _record_comments(self, obj: GrowthRecord) -> list:
+        """
+        取这条动态的评论（按时间正序）。
+
+        列表页会用 Prefetch 把评论一次性挂到 `prefetched_comments` 上，
+        这里优先用它，避免每条动态各查一次（N+1）。
+        """
+        prefetched = getattr(obj, "prefetched_comments", None)
+        if prefetched is not None:
+            return list(prefetched)
+        return list(
+            Comment.objects.filter(record=obj)
+            .select_related("author")
+            .order_by("created_at", "id")
+        )
+
+    def get_comment_count(self, obj: GrowthRecord) -> int:
+        return len(self._record_comments(obj))
+
+    def get_latest_comments(self, obj: GrowthRecord) -> list[dict]:
+        """最近 3 条，正序（朋友圈里也是从上往下读）。"""
+        comments = self._record_comments(obj)[-3:]
+        labels = self.context.get("author_labels") or {}
+        avatars = self.context.get("author_avatars") or {}
+        return [
+            {
+                "id": c.id,
+                "author_id": c.author_id,
+                "author_relation_label": labels.get(c.author_id, ""),
+                "author_avatar_url": avatars.get(c.author_id, ""),
+                "body": c.body,
+                "has_audio": bool(c.audio_id),
+                "created_at": c.created_at,
+            }
+            for c in comments
+        ]
 
 
 class GrowthRecordDetailSerializer(GrowthRecordSerializer):

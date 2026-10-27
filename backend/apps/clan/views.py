@@ -570,9 +570,18 @@ class GrowthRecordListCreateView(ListCreateAPIView):
             "media",
             queryset=MediaAsset.objects.filter(for_comment=False),
         )
+        # 列表要展示评论（朋友圈式），一次 Prefetch 全取，
+        # 而不是每条动态单独查一次。
+        prefetched_comments = Prefetch(
+            "comments",
+            queryset=Comment.objects.select_related("author", "audio").order_by(
+                "created_at", "id"
+            ),
+            to_attr="prefetched_comments",
+        )
         return (
             GrowthRecord.objects.select_related("author")
-            .prefetch_related(post_media)
+            .prefetch_related(post_media, prefetched_comments)
             .filter(workspace_id=self.kwargs["workspace_id"])
             .order_by("-created_at", "-id")
         )
@@ -614,9 +623,18 @@ class GrowthRecordDetailView(APIView):
             "media",
             queryset=MediaAsset.objects.filter(for_comment=False),
         )
+        # 列表要展示评论（朋友圈式），一次 Prefetch 全取，
+        # 而不是每条动态单独查一次。
+        prefetched_comments = Prefetch(
+            "comments",
+            queryset=Comment.objects.select_related("author", "audio").order_by(
+                "created_at", "id"
+            ),
+            to_attr="prefetched_comments",
+        )
         return (
             GrowthRecord.objects.select_related("author")
-            .prefetch_related(post_media)
+            .prefetch_related(post_media, prefetched_comments)
             .filter(workspace_id=self.kwargs["workspace_id"])
         )
 

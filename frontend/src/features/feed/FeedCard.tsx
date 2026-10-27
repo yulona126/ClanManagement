@@ -5,6 +5,7 @@ import type { MediaAsset } from '../../api/media'
 import { AudioPlayer } from '../../components/AudioPlayer'
 import { resolveMediaUrl } from '../media/mediaUrl'
 import { AuthorAvatar } from './AuthorAvatar'
+import { FeedComments } from './FeedComments'
 import { formatRelativeTime } from './time'
 
 const BODY_COLLAPSE_AT = 120
@@ -52,8 +53,20 @@ function VisualTile({
   )
 }
 
-export function FeedCard({ record }: { record: GrowthRecord }) {
+export function FeedCard({
+  record,
+  workspaceId,
+  canComment = false,
+}: {
+  record: GrowthRecord
+  /** 评论要在卡片里就地提交，需要知道空间 */
+  workspaceId: number
+  /** 该空间成员都可以评论（后端 CanPostComment 只要求成员） */
+  canComment?: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
+  /** 无评论时点「评论」就地展开输入框 */
+  const [commentOpen, setCommentOpen] = useState(false)
   const author = record.author_relation_label || `用户 #${record.author_id}`
   const visuals = record.media
     .filter((m) => m.media_type === 'image' || m.media_type === 'video')
@@ -129,13 +142,47 @@ export function FeedCard({ record }: { record: GrowthRecord }) {
           </div>
         ) : null}
 
+        {/*
+          朋友圈式评论区：直接显示最近几条 + 就地回复。
+          旧版后端没有 latest_comments 时退回成只有「评论」链接。
+        */}
+        {record.latest_comments !== undefined ? (
+          <FeedComments
+            recordId={record.id}
+            workspaceId={workspaceId}
+            count={record.comment_count ?? record.latest_comments.length}
+            initial={record.latest_comments}
+            canPost={canComment}
+            open={commentOpen || (record.comment_count ?? 0) > 0}
+          />
+        ) : null}
+
         <footer className="feed-card-foot">
           <time className="feed-time" dateTime={record.created_at}>
             {formatRelativeTime(record.created_at)}
           </time>
-          <Link className="feed-action" to={`/records/${record.id}#comments`}>
-            评论
-          </Link>
+          {/*
+            有评论：链接到详情看完整讨论。
+            没评论：就地展开输入框 —— 家庭场景下"想留一句话"是主路径，
+            不该逼用户先进详情页。
+          */}
+          {(record.comment_count ?? 0) > 0 ? (
+            <Link className="feed-action" to={`/records/${record.id}#comments`}>
+              评论 {record.comment_count}
+            </Link>
+          ) : canComment && record.latest_comments !== undefined ? (
+            <button
+              type="button"
+              className="feed-action feed-action--button"
+              onClick={() => setCommentOpen(true)}
+            >
+              评论
+            </button>
+          ) : (
+            <Link className="feed-action" to={`/records/${record.id}#comments`}>
+              评论
+            </Link>
+          )}
         </footer>
       </div>
     </article>

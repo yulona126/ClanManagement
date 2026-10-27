@@ -1,6 +1,17 @@
 import { api } from './client'
 import type { MediaAsset } from './media'
 
+/** 列表里带出的评论摘要（朋友圈式，避免每条动态单独请求评论）。 */
+export type RecordCommentPreview = {
+  id: number
+  author_id: number
+  author_relation_label: string
+  author_avatar_url?: string
+  body: string
+  has_audio?: boolean
+  created_at: string
+}
+
 export type GrowthRecord = {
   id: number
   title: string
@@ -11,6 +22,14 @@ export type GrowthRecord = {
   created_at: string
   updated_at: string
   media: MediaAsset[]
+  /**
+   * 评论总数与最近 3 条。
+   *
+   * 旧版后端没有这两个字段（undefined）——此时前端回退为「不展示预览」，
+   * 而不是显示成 0 条。
+   */
+  comment_count?: number
+  latest_comments?: RecordCommentPreview[]
 }
 
 export type PaginatedRecords = {
