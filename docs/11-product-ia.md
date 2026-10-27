@@ -103,7 +103,7 @@ flowchart LR
 ### 11.3.4 壳层
 
 - **`UserShell`**：顶栏（品牌 + 宝宝 + 导航）；手机汉堡弹出侧滑菜单；**不含** staff 管理主入口。
-- **`TimelinePage`（`/timeline`）例外**：独立全屏壳，不套 UserShell；自带固定字标、开场遮罩、右侧翻页控件与索引抽屉。入口在 Feed 顶部横幅与顶栏「胶片」。
+- **`TimelinePage`（`/timeline`）例外**：独立全屏壳，不套 UserShell；自带固定字标、开场遮罩、右侧翻页控件与索引抽屉。入口为顶栏「胶片」。
 
 ### 11.3.5 成长胶片（Timeline 展示页）
 
