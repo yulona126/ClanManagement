@@ -108,7 +108,8 @@ from .services import (
 from .services.storage import (
     image_kind_matches_extension,
     is_definitely_not_image,
-    read_object_head,
+    looks_like_flat_black,
+    read_object_probe,
     save_local_object,
     verify_local_put_signature,
 )
@@ -846,7 +847,7 @@ class MediaCompleteView(APIView):
         if media_type == MediaAsset.MediaType.IMAGE and getattr(
             settings, "MEDIA_BYTE_CHECK", True
         ):
-            head = read_object_head(object_key)
+            head, object_bytes = read_object_probe(object_key)
             trusted, actual_kind = image_kind_matches_extension(object_key, head)
             # 只拦"确证不是图片"（空 / HTML / PDF / ZIP）：这类存进去必然是坏的，
             # 而且用户重传就能解决。认不出或是扩展名不符的一律放行，仅记日志，
@@ -868,13 +869,31 @@ class MediaCompleteView(APIView):
                     }
                 )
             media_log.info(
-                "complete image bytes ws=%s key=%s actual=%s trusted=%s checked=%sB",
+                "complete image bytes ws=%s key=%s actual=%s trusted=%s checked=%sB size=%s",
                 workspace_id,
                 object_key,
                 actual_kind,
                 trusted,
                 len(head),
+                object_bytes,
             )
+
+            # 纯色黑图的特征：字节/像素极低。只报警不拦截 ——
+            # 前端已加了「编码后全黑就回退原图」的守卫，这里是线上兜底可观测性。
+            exif_dims = (
+                (exif_fields or {}).get("width"),
+                (exif_fields or {}).get("height"),
+            )
+            if looks_like_flat_black(object_bytes, exif_dims[0], exif_dims[1]):
+                media_log.warning(
+                    "complete suspicious flat image ws=%s key=%s size=%s wh=%sx%s "
+                    "(bytes/px 极低，可能是全黑图)",
+                    workspace_id,
+                    object_key,
+                    object_bytes,
+                    exif_dims[0],
+                    exif_dims[1],
+                )
         file_url = public_url(object_key)
         thumb = thumbnail_url(object_key, media_type, file_url)
 
