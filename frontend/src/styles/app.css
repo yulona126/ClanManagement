@@ -4318,3 +4318,73 @@ a.btn-ghost:hover {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Feed → 成长胶片入口（Timeline 展示页）
+   视觉：细边框 + 单行克制排版，hover 只变边框与文字色，不做位移/阴影。
+   --------------------------------------------------------------------------- */
+
+.feed-tape-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  text-decoration: none;
+  transition: border-color var(--duration-med) var(--ease-out),
+    background-color var(--duration-med) var(--ease-out);
+}
+
+.feed-tape-entry:hover {
+  border-color: var(--color-ink);
+  background: var(--color-bg-deep);
+  color: var(--color-ink);
+}
+
+.feed-tape-entry__rule {
+  flex: none;
+  width: 1.75rem;
+  height: 1px;
+  background: var(--color-ink);
+}
+
+.feed-tape-entry__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.feed-tape-entry__text b {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.feed-tape-entry__text span {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.feed-tape-entry__go {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+.feed-tape-entry:hover .feed-tape-entry__go {
+  color: var(--color-ink);
+}
+
+@media (max-width: 480px) {
+  .feed-tape-entry__go {
+    display: none;
+  }
+}

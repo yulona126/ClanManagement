@@ -1,10 +1,13 @@
 import { VitePWA } from 'vite-plugin-pwa'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { mockApiPlugin } from './vite.mock-api.ts'
 
 export default defineConfig({
   plugins: [
     react(),
+    // 开发期假 API（仅 apply: 'serve'，生产构建不含）
+    mockApiPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [

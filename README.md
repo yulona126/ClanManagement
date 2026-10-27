@@ -20,7 +20,7 @@
 | 当前 | 双端 IA / Feed | 用户端朋友圈化 + 管理端分离（roadmap U1–U5） |
 | 1 | 一天一张照片 | 日历 / 日维度（并入 U3，软提示） |
 | 2 | 写给 hexia | 私密/半私密信件流 |
-| 3 | Timeline | 沉浸式时间轴回顾（参考 [The Lookback](https://tympanus.net/codrops/2026/03/03/the-lookback-a-digital-capsule-for-better-off-studios-creative-past/)） |
+| 3 | Timeline ✅ 展示页 | 沉浸式时间轴「成长胶片」`/timeline`，当前用假数据（参考 [The Lookback](https://tympanus.net/codrops/2026/03/03/the-lookback-a-digital-capsule-for-better-off-studios-creative-past/)） |
 | 4 | PWA 深化 | 离线列表、推送等（基线可安装在阶段 0） |
 
 ## 技术栈
@@ -40,6 +40,7 @@
 - **U1 ✅**：用户端 / 管理端分壳 + Feed 首页（开发端口 **5180**）  
 - **U2 ✅**：朋友圈卡片、详情菜单、Compose、空状态/骨架  
 - **U4 ✅**：管理台标准后台（概览 / 用户 / 工作区 / 成员关系）  
+- **展示页 ✅ 模块一**：成长胶片 `/timeline`（横向轨道 + canvas 时间刻度尺，假数据；视觉参考 The Lookback 的 Timeline 页）  
 - **下一阶段：U3** — 日历与一天一张（见 [`docs/05-roadmap.md`](./docs/05-roadmap.md)）  
 - **视觉主题**：[`docs/10-frontend-theme.md`](./docs/10-frontend-theme.md)
 

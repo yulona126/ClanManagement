@@ -56,6 +56,7 @@ flowchart LR
 | 项 | 路由 | 说明 |
 | :--- | :--- | :--- |
 | 动态 | `/` 或 `/feed` | 默认；朋友圈流 |
+| 胶片 | `/timeline` | **展示页**：全屏沉浸式时间轴（独立壳，不经 UserShell） |
 | 相册 | `/album` | 相册列表（全部照片 + 自建相册） |
 | 全部照片 | `/album/all` | 空间内图片汇总，全屏浏览 |
 | 相册详情 | `/album/:id` | 相册内容与管理 |
@@ -73,6 +74,7 @@ flowchart LR
 | :--- | :--- | :--- | :--- |
 | `/login` | 登录 | 公开 | [`LoginPage`](../frontend/src/features/auth/LoginPage.tsx)；成功后 → Feed |
 | `/spaces` | 选空间 | 已登录 | 干净卡片：封面 / 宝宝名 / 年龄 / Latest Memory；无自助创建 |
+| `/timeline` | 成长胶片（展示页） | 已登录 | **独立全屏壳**；开场遮罩 → 逐条展台 → 月份/标签筛选 → 索引抽屉；数据源见下 |
 | `/spaces/new` | （兼容） | staff | 跳转 `/manage/workspaces` |
 | `/` 或 `/feed` | 动态 Feed | 成员可读 | **新建**；`GET .../records/` 按日分组卡片化 |
 | `/records/:id` | 帖子详情 | 成员可读；改删按角色 | [`RecordDetailPage`](../frontend/src/features/records/RecordDetailPage.tsx) → 阅读向 UI |
@@ -94,6 +96,33 @@ flowchart LR
 ### 11.3.4 壳层
 
 - **`UserShell`**：顶栏（品牌 + 宝宝 + 导航）；手机汉堡弹出侧滑菜单；**不含** staff 管理主入口。
+- **`TimelinePage`（`/timeline`）例外**：独立全屏壳，不套 UserShell；自带固定字标、开场遮罩、右侧翻页控件与索引抽屉。入口在 Feed 顶部横幅与顶栏「胶片」。
+
+### 11.3.5 成长胶片（Timeline 展示页）
+
+视觉与交互参考 [The Lookback](https://tlb.betteroff.studio/) 的 Timeline 页：
+巨字标 + `mix-blend-difference` + 噪点层 + **横向图片轨道 + 底部时间刻度尺**。
+整页没有纵向滚动——视口就是轨道，滚轮 / 拖拽都转成横向位移。
+
+| 项 | 现状 |
+| :--- | :--- |
+| 数据源 | **`frontend/src/features/timeline/mockMoments.ts`（假数据）**；字段与 `GrowthRecord` 同形，接真实 API 只需替换数据源 |
+| 图片 | 内联 SVG 占位（本地生成，不依赖外网） |
+| 结构 | 开场遮罩 → 巨字标逐字上抬 → 横向轨道（左右可无限翻阅至两端）→ 单行读数 → 底部刻度尺 |
+| 滚动 | **纵向滚动** → **GSAP ScrollTrigger** 映射为横向位移，1px 纵向 = 1px 横向。wheel 由 `Rail.tsx` 接管（`preventDefault` + `scrollBy`）：这套布局下原生 wheel 滚动并不总是响应，接管可保证各浏览器一致且不会重复滚动；`→`/`←`、PageDown、End、滚动条均可用 |
+| 轨道 | [`Rail.tsx`](../frontend/src/features/timeline/Rail.tsx)：`position: fixed` 钉在视口，只写容器 `transform`；`←` `→`（或 `J` `K`）跳转，点击图片开大图 |
+| 卡片标记 | 编号在图上沿、标签在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
+| 刻度尺 | [`Ruler.tsx`](../frontend/src/features/timeline/Ruler.tsx)：**canvas 逐帧绘制**（上千根 1px 竖线做成 DOM 会拖垮渲染），挂在 `gsap.ticker` 上与 ScrollTrigger 同帧；游标固定屏幕正中，标尺从它下面滑过；贴底 `bottom 6rem`（移动 8rem）；点按 / 拖动可跳转 |
+| 刻度语义 | 每月占「该月动态数 × 9」个槽位，每月第一槽为长刻度并带月份名 |
+| 单元测试面 | 见 [`scripts/devtools/README.md`](../frontend/scripts/devtools/README.md)：`measure.mjs` 可一键体检轨道几何与刻度尺 |
+| 样式 | [`timeline.css`](../frontend/src/features/timeline/timeline.css)（`tl-` 前缀）+ [`rail.css`](../frontend/src/features/timeline/rail.css)（`tlr-` 前缀），仅在 `.tl-root` 内生效 |
+
+**无限循环（必须）**：轨道按 `gsap.utils.wrap()` 取模循环，与参考站一致。**不能改成两端夹紧**——滚动带惯性（触控板 / 触摸甩动），夹紧时 GSAP 的平滑与浏览器惯性会在两端互相顶，出现明显顿挫。轨道渲染两份拷贝供循环取内容；文档滚动位置也由 wheel 处理器在边界折回，所以可以一直滚下去。参考站另有一处 `11px/16px` 换算 bug（标尺比轨道多绕 45%），这里刻度、月份标签、图片共用同一套比例，三者严格对齐。
+
+**索引语义（重要）**：`targetIndex`（用户明确跳转：键盘 / 刻度尺 / 索引）与 `activeIndex`（游标当前压着哪张，由滚动推导）是**两个状态**。合成一个会出现"滚动推出新下标 → 触发跳转 → 滚回该下标位置"的自我拉扯（实测滚到 9000 被一路吸回 6930）。只有 `targetIndex` 驱动滚动。
+
+**进度**：模块一（轨道 + 刻度尺）已完成并逐项验证；模块二（月份 / 标签筛选 + 索引抽屉）待接入。
+
 - 由现 [`AppShell`](../frontend/src/components/AppShell.tsx) / [`TopBar`](../frontend/src/components/TopBar.tsx) 拆分演化。
 - 旧首页 [`HomePage`](../frontend/src/features/auth/HomePage.tsx)（欢迎语 + 成员面板）**不再作为默认落地页**；成员能力迁到空间设置。
 

@@ -19,6 +19,7 @@ import { MePage } from '../features/me/MePage'
 import { RecordDetailPage } from '../features/records/RecordDetailPage'
 import { RecordFormPage } from '../features/records/RecordFormPage'
 import { WorkspaceSettingsPage } from '../features/settings/WorkspaceSettingsPage'
+import { TimelinePage } from '../features/timeline/TimelinePage'
 import { WorkspacePickerPage } from '../features/workspaces/WorkspacePickerPage'
 import { WorkspaceProvider } from '../features/workspaces/WorkspaceContext'
 import { PwaUpdateToast } from '../pwa/PwaUpdateToast'
@@ -70,6 +71,8 @@ export function AppRoutes() {
               element={<Navigate to="/manage/workspaces" replace />}
             />
             <Route path="me" element={<MePage />} />
+            {/* 沉浸式成长时间轴：全屏展示页，不进 UserShell 壳层 */}
+            <Route path="timeline" element={<TimelinePage />} />
 
             <Route element={<WorkspaceAppLayout />}>
               <Route index element={<FeedPage />} />

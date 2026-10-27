@@ -199,3 +199,119 @@ def put_oss_bytes(object_key: str, body: bytes, content_type: str) -> None:
         ContentType=content_type or "image/jpeg",
         CacheControl=OBJECT_CACHE_CONTROL,
     )
+
+
+# ---------------------------------------------------------------- 内容校验
+#
+# 黑图 / 打不开的一个常见根因：对象存的字节和扩展名/声明类型不一致
+# （前端 canvas 编码失败、直传被截断、或拿到的是错误页 HTML）。
+# 登记前先读前几个字节做魔数校验，把问题挡在上传时，而不是等用户看到黑图。
+
+_IMAGE_MAGIC = (
+    (b"\xff\xd8\xff", "jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"GIF87a", "gif"),
+    (b"GIF89a", "gif"),
+    (b"BM", "bmp"),
+)
+
+_EXT_TO_KIND = {
+    "jpg": "jpeg",
+    "jpeg": "jpeg",
+    "png": "png",
+    "gif": "gif",
+    "webp": "webp",
+    "bmp": "bmp",
+}
+
+
+def sniff_image_kind(head: bytes) -> str:
+    """按魔数判断实际图片类型；识别不出返回 'unknown'。"""
+    for sig, kind in _IMAGE_MAGIC:
+        if head.startswith(sig):
+            return kind
+    # WEBP: "RIFF" + 4 字节长度 + "WEBP"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    # ISO-BMFF: heic / heif / avif / mp4 —— 第 4..8 字节是 "ftyp"
+    if len(head) >= 12 and head[4:8] == b"ftyp":
+        brand = head[8:12].lower()
+        if brand.startswith(b"hei") or brand.startswith(b"hev"):
+            return "heic"
+        if brand.startswith(b"avi"):
+            return "avif"
+        if brand.startswith(b"mp4") or brand.startswith(b"isom"):
+            return "mp4"
+        return "bmff"
+    # 以下是"明确不是图片"的类型
+    if head.startswith(b"%PDF"):
+        return "pdf"
+    if head.startswith(b"PK\x03\x04"):
+        return "zip"
+    stripped = head.lstrip()
+    if stripped[:1] in (b"<", b"{"):
+        return "html-or-json"
+    return "unknown"
+
+
+def read_object_head(object_key: str, size: int = 16) -> bytes:
+    """读对象开头若干个字节，用于登记前的魔数校验。失败返回 b""。"""
+    try:
+        if settings.STORAGE_BACKEND == "oss":
+            client = _oss_client()
+            obj = client.get_object(
+                Bucket=settings.OSS_BUCKET_NAME,
+                Key=object_key,
+                Range=f"bytes=0-{size - 1}",
+            )
+            try:
+                return obj["Body"].read()
+            finally:
+                obj["Body"].close()
+        path = Path(settings.MEDIA_ROOT) / object_key
+        with path.open("rb") as fh:
+            return fh.read(size)
+    except Exception:  # noqa: BLE001 - 校验失败不应阻断上传，交给调用方记录
+        return b""
+
+
+# 确证"不是图片"的类型：只有这些才拒绝入库
+_DEFINITELY_NOT_IMAGE = frozenset({"pdf", "zip", "html-or-json"})
+
+# 认得出、且确实是图片的类型
+_IMAGE_KINDS = frozenset(
+    {"jpeg", "png", "gif", "webp", "bmp", "heic", "avif", "mp4", "bmff"}
+)
+
+
+def is_definitely_not_image(kind: str, head: bytes) -> bool:
+    """是否确证不是图片。只对空对象 / HTML / PDF / ZIP 这类返回 True。"""
+    return not head or kind in _DEFINITELY_NOT_IMAGE
+
+
+def image_kind_matches_extension(object_key: str, head: bytes) -> tuple[bool, str]:
+    """
+    校验「扩展名」与「真实字节」是否一致。
+
+    返回 (是否可信, 实际类型)。
+
+    策略是**宁可放过、不可错杀**：用户手机上明明能看到这张照片，
+    我们因为认不出字节就拒收，体验比存一张坏图还糟。所以：
+      - 扩展名与真实类型一致 → 可信
+      - 认得出是图片但扩展名不符（例如 PNG 存成 .jpg）→ 不可信但**放行**，只记日志
+      - 认不出（可能是新格式 / 编码器变体）→ 放行
+      - 确证不是图片（空 / HTML / PDF / ZIP）→ 拒绝
+    """
+    actual = sniff_image_kind(head)
+    if is_definitely_not_image(actual, head):
+        return False, actual
+    if actual not in _IMAGE_KINDS:
+        return True, actual  # 认不出但不像错误页，放过
+    ext = object_key.rsplit(".", 1)[-1].lower() if "." in object_key else ""
+    expected = _EXT_TO_KIND.get(ext)
+    # heic/avif/mp4 等不一定有对应扩展名映射，交给调用方按 kind 判断
+    if expected is None:
+        return True, actual
+    if expected != actual:
+        return False, actual
+    return True, actual

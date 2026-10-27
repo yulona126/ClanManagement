@@ -16,6 +16,7 @@
 | [10-frontend-theme.md](./10-frontend-theme.md) | **Minimal White 视觉锁定**、交互规则、`Button` / 空状态 | 做页面样式与按钮时必读 |
 | [11-product-ia.md](./11-product-ia.md) | **用户端 / 管理端页面地图与导航** | 改路由、壳、Feed 前必读 |
 | [12-deploy.md](./12-deploy.md) | **生产部署到新服务器**（Nginx + gunicorn + OSS + HTTPS） | 上线、换机、运维发布 |
+| [14-media-debugging.md](./14-media-debugging.md) | **黑图 / 图片打不开的排查**（日志、`dbg_media`、A/B 分类） | 线上图片显示异常 |
 
 ## 快速对照：你现在该做什么
 
@@ -33,3 +34,4 @@
 - 脚手架/启动方式变更：同步改 `07-dev-setup.md`、`09-scaffold.md`。
 - 视觉规范变更：同步改 `10-frontend-theme.md` 与 `frontend/src/styles/tokens.css`。
 - 页面 / 导航 / 双端边界变更：同步改 `11-product-ia.md` 与 `01-srs.md` 双端章节。
+- 上传链路变更（presign / complete / 内容校验）：同步改 `14-media-debugging.md`。

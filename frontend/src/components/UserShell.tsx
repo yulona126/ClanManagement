@@ -17,6 +17,7 @@ function useNavItems(): NavItem[] {
 
   return [
     { to: '/', label: '动态', end: true },
+    { to: '/timeline', label: '胶片' },
     { to: '/album', label: '相册' },
     { to: '/family', label: '家族' },
     { to: '/compose', label: '发布', hidden: !canWrite },
