@@ -46,12 +46,16 @@
 | :--- | :--- |
 | `src/features/theme/theme.css` | `.dark` 变量覆盖 + View Transition 的 `::view-transition-*` 规则 |
 | `src/features/theme/theme.ts` | 三态状态机、圆形扩散动效、系统配色跟随 |
-| `src/features/theme/ThemeSwitch.tsx` | 三档开关（放进胶囊菜单） |
+| `src/features/theme/ThemeSwitch.tsx` | `ThemeToggleButton`：顶栏的图标按钮，点一下在浅/深之间切（不弹选项） |
 | `frontend/index.html` | **首帧内联脚本**（先加 `.dark` 再绘制，避免白闪）；key 与 `theme.ts` 一致 |
 | `src/antd/theme.ts` | `antdDarkToken`：antd 的颜色 token 是写死的 hex，必须单独给深色值 |
 
-注意：antd 的 `<App>` 包裹层会输出 `colorText`，只切 `darkAlgorithm` 不够 ——
-`antdDarkToken` 里的显式颜色优先级更高，两者要一起换。
+注意：antd 的颜色是**写死 hex**（要推导 hover/active），只切 `darkAlgorithm` 不够 ——
+`<App>` 包裹层的 `colorText`、`Input` 的 `colorBgContainer` 会压过算法，
+所以 `theme.ts` 导出 `buildAntdTheme(palette, algorithm)`，按浅/深两套调色板各构造一次。
+
+交互约定：默认 `system`（跟随系统）；用户点顶栏按钮后变成显式 light/dark，
+之后不再跟随系统。界面上**不提供**「跟随系统」选项。
 
 ---
 

@@ -41,7 +41,14 @@ function VisualTile({
         <img
           src={poster || resolveMediaUrl(asset.file_url, asset.object_key)}
           alt=""
-          loading="lazy"
+          /*
+           * 不要 lazy：从详情页返回时整个列表会重新挂载，lazy 会让可见区域外的
+           * 图片重新走一遍「等待进入视口 → 解码 → 绘制」，肉眼就是一片闪。
+           * eager + sync 让图片在首帧就完成解码，返回时不再空白。
+           * 图片本身是 400px 缩略图（见 thumbnail_url），解码开销很小。
+           */
+          loading="eager"
+          decoding="sync"
         />
       )}
       {isVideo ? (

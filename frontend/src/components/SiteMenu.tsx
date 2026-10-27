@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useWorkspace } from '../features/workspaces/WorkspaceContext'
-import { ThemeSwitch } from '../features/theme/ThemeSwitch'
 
 type NavItem = {
   to: string
@@ -216,11 +215,6 @@ export function SiteMenu() {
             </NavLink>
           ))}
         </nav>
-
-        <div className="site-menu__theme">
-          <span className="site-menu__theme-label">外观</span>
-          <ThemeSwitch />
-        </div>
 
         <p className="site-menu__hint">
           <kbd>⌘</kbd>

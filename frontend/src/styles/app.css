@@ -590,6 +590,38 @@ a.btn-ghost:hover {
   }
 }
 
+/* ------------------------------------------------------------ 顶栏主题按钮 */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-right: 0.2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.theme-toggle:hover {
+  color: var(--color-ink);
+  background: var(--color-bg-deep);
+  border-color: var(--color-border);
+}
+
+.theme-toggle svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 /* ------------------------------------------------------------ 主题三态开关 */
 
 .theme-switch {
@@ -1857,26 +1889,52 @@ a.btn-ghost:hover {
   gap: var(--space-5);
 }
 
+/*
+ * 日期头：吸顶时只留一枚小胶囊，不再铺一条毛玻璃横条
+ * （整条半透明背景压在正文上，滚动时脏且抢注意力）。
+ * 胶囊本身不透明，正文从它下面滚过去也不会糊在一起。
+ */
 .feed-day-label {
   position: sticky;
-  top: calc(var(--header-height) + 0.25rem);
+  /* 紧贴表头下沿：留缝会让正文从缝里露出一条，看着像错位 */
+  top: var(--header-height);
   z-index: 2;
+  display: flex;
   margin: 0 0 var(--space-3);
-  padding: 0.15rem 0;
-  font-size: var(--text-sm);
+  padding: 0.5rem 0 0.4rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--color-muted);
-  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
-  backdrop-filter: blur(6px);
+  /*
+   * 实底而不是半透明毛玻璃：胶囊会吸在顶部，必须有一块不透明的底把
+   * 下面滚过去的正文挡住，否则头像/文字会从胶囊两侧露出来，看着像错位。
+   */
+  background: var(--color-bg);
+  pointer-events: none;
 }
 
 .feed-day-label span {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.24rem 0.6rem;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-bg-deep);
-  color: var(--color-ink-soft);
+  background: var(--color-surface);
+  color: var(--color-muted);
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* 日期前的小圆点，让吸顶胶囊更像「当前日期」而不是普通标签 */
+.feed-day-label span::before {
+  content: "";
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+  opacity: 0.55;
 }
 
 .feed-list {

@@ -55,15 +55,38 @@ function groupByDay(
   return [...map.entries()].map(([key, items]) => ({ key, items }))
 }
 
+/** 上次进入的空间 id —— 上下文还没加载完时先用它取缓存，避免白屏。 */
+function storedWorkspaceId(): number | null {
+  try {
+    const raw = window.localStorage.getItem('claner.currentWorkspaceId')
+    const id = raw ? Number(raw) : NaN
+    return Number.isFinite(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 export function FeedPage() {
   const { current, loading: wsLoading } = useWorkspace()
   const workspaceId = current?.id
 
+  /*
+   * 先用「上次的空间」读缓存。
+   *
+   * 关键：手机侧滑返回在 iOS 上常常是**整页重新加载**（不是 SPA 返回），
+   * 这时 WorkspaceContext 要等 /api/workspaces/ 回来才知道 current，
+   * 若此刻才去读缓存，首帧就是骨架屏 —— 用户看到的就是「闪一下」。
+   * 用 localStorage 里记的 id 提前读，列表可以在首帧就带着内容出来。
+   */
+  const bootWorkspaceId = workspaceId ?? storedWorkspaceId()
+
   const initialView =
-    workspaceId != null ? getFeedViewState(workspaceId) : { lastPage: 1, scrollY: 0 }
+    bootWorkspaceId != null
+      ? getFeedViewState(bootWorkspaceId)
+      : { lastPage: 1, scrollY: 0 }
   const initialPageCache =
-    workspaceId != null
-      ? getFeedPageCache(workspaceId, initialView.lastPage)
+    bootWorkspaceId != null
+      ? getFeedPageCache(bootWorkspaceId, initialView.lastPage)
       : null
 
   const [page, setPage] = useState(() => initialView.lastPage)

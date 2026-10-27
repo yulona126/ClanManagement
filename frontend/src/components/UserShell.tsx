@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useWorkspace } from '../features/workspaces/WorkspaceContext'
+import { ThemeToggleButton } from '../features/theme/ThemeSwitch'
 import { SiteMenu } from './SiteMenu'
 
 /**
@@ -24,6 +25,8 @@ export function UserTopBar() {
         </Link>
       ) : null}
       <div className="topbar-spacer" />
+      {/* 主题切换放在外面：一个图标按钮，点了就在浅/深之间切，不弹任何选项 */}
+      <ThemeToggleButton className="theme-toggle" />
       <SiteMenu />
     </header>
   )
