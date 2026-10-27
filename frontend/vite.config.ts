@@ -29,7 +29,13 @@ export default defineConfig(({ mode }) => {
     // 连远端 API 时的告警 + 只读护栏（仅 apply: 'serve'）
     apiGuardPlugin({ target: devApiTarget, readonly: devApiReadonly }),
     VitePWA({
-      registerType: 'autoUpdate',
+      /*
+       * 用 prompt 而不是 autoUpdate：
+       * autoUpdate 会让新 SW 立刻 skipWaiting 并接管，页面内容却还是旧的
+       * （或者在用户正填表单时突然重载）。改成 prompt 后，
+       * 由 PwaUpdateToast 在合适的时机提示/应用更新。
+       */
+      registerType: 'prompt',
       includeAssets: [
         'favicon.svg',
         'icons/claner-icon-192.png',
@@ -75,6 +81,23 @@ export default defineConfig(({ mode }) => {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/media/],
+        // 清掉上一版 precache，避免旧 hash 资源长期残留
+        cleanupOutdatedCaches: true,
+        /*
+         * 不缓存 HTML 导航：PWA 里最容易"看着更新了、其实还是旧页面"的就是这里。
+         * 资源本身带 hash，缓存住没问题；入口必须每次走网络（离线时由 precache 兜底）。
+         */
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'claner-pages',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+        ],
       },
       // 开发期关掉 SW，避免缓存旧 JS 导致「改了没生效」
       devOptions: {
