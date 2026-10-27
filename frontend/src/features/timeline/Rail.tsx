@@ -30,6 +30,10 @@ export type RailHandle = {
  * 比"监听 wheel 自己累加"好在：惯性 / 触控板 / 移动端触摸全部交给浏览器，
  * 不必自己写物理；刷新（resize、字体加载）由 ScrollTrigger 负责重算。
  */
+/** 点按判定：位移与时长都要够小，避免滑动被当成点击。 */
+const TAP_MAX_MOVE = 10
+const TAP_MAX_MS = 500
+
 export function Rail({
   moments,
   targetIndex,
@@ -70,6 +74,8 @@ export function Rail({
   /** 下一次 targetIndex 变化是否来自用户明确操作（决定要不要滚） */
   const wantScrollRef = useRef(true)
   const stRef = useRef<ScrollTrigger | null>(null)
+  /** 按下时的位置与时间，用来区分「点按」和「滑动」 */
+  const tapStartRef = useRef<{ x: number; y: number; t: number } | null>(null)
   /**
    * 把「当前进度 → 游标压着的下标」这段逻辑暴露给跳转补间用。
    *
@@ -372,7 +378,24 @@ export function Rail({
               <article
                 key={`${copy}-${m.id}`}
                 className={`tlr-slide${i === activeIndex ? ' is-active' : ''}`}
-                onPointerUp={() => onSelect(m)}
+                onPointerDown={(e) => {
+                  tapStartRef.current = {
+                    x: e.clientX,
+                    y: e.clientY,
+                    t: Date.now(),
+                  }
+                }}
+                onPointerUp={(e) => {
+                  const start = tapStartRef.current
+                  tapStartRef.current = null
+                  if (!start) return
+                  const moved =
+                    Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y)
+                  // 滑动（含横向拖动轨道）不打开大图；只有明确点按才开
+                  if (moved > TAP_MAX_MOVE) return
+                  if (Date.now() - start.t > TAP_MAX_MS) return
+                  onSelect(m)
+                }}
                 aria-selected={i === activeIndex}
                 aria-hidden={copy === 1 ? true : undefined}
               >

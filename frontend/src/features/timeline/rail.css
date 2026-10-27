@@ -344,6 +344,20 @@
  * 滚动提示。这个页面里轨道是 fixed 的，用户两指滑动时画面几乎不动，
  * 很容易误以为"滚不了"，所以给一个明确的引导，滚动后即淡出。
  */
+.tlr-scrollhint__touch {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tlr-scrollhint__desktop {
+    display: none;
+  }
+
+  .tlr-scrollhint__touch {
+    display: inline;
+  }
+}
+
 .tlr-scrollhint {
   position: fixed;
   left: 50%;
@@ -387,7 +401,21 @@
 }
 
 @media (max-width: 649px) {
-  .tlr-scrollhint {
+  .tlr-scrollhint__touch {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tlr-scrollhint__desktop {
+    display: none;
+  }
+
+  .tlr-scrollhint__touch {
+    display: inline;
+  }
+}
+
+.tlr-scrollhint {
     bottom: 13rem;
   }
 }
@@ -403,8 +431,24 @@
 @media (max-width: 649px) {
   .tlr-foot {
     left: 1rem;
+    /* 读数别贴着屏幕底边（iPhone home indicator） */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
   }
 
+  /* 手机上屏幕窄，卡片略放大一点，主角更明确 */
+  .tlr-slide {
+    width: 15.5rem;
+    margin-right: 1.1rem;
+  }
+
+  /* 刻度尺离读数远一点，避免两类文字挤在一起 */
+  .tlr-ruler {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 7.5rem);
+  }
+
+  .tlr-scrollhint {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12.5rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

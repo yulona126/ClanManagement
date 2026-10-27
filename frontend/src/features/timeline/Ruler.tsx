@@ -120,6 +120,21 @@ export function Ruler({
       // 每槽像素 = 画布宽 / 可见槽数；标签定位用 CSS calc 表达同一比例
     }
 
+    /*
+     * 刻度颜色必须跟着主题走。
+     * 之前写死 `#000`：浅色下没问题，深色主题里就是**黑线画在黑底上**，
+     * 整个刻度尺看起来像没画出来。
+     * canvas 继承 .tl-root 的 color（= --tl-ink），切主题时重读一次即可。
+     */
+    let ink = getComputedStyle(canvas).color || '#111'
+    const themeObserver = new MutationObserver(() => {
+      ink = getComputedStyle(canvas).color || '#111'
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style'],
+    })
+
     const draw = () => {
       const ratio = 1
 
@@ -127,7 +142,7 @@ export function Ruler({
       const cursorX = width * 0.5
 
       ctx.clearRect(0, 0, width, CANVAS_HEIGHT)
-      ctx.strokeStyle = '#000'
+      ctx.strokeStyle = ink
       ctx.lineWidth = CFG.lineWidth
 
       /*
@@ -228,6 +243,7 @@ export function Ruler({
 
     return () => {
       gsap.ticker.remove(draw)
+      themeObserver.disconnect()
       window.removeEventListener('resize', onResize)
       wrap.removeEventListener('mouseenter', onEnter)
       wrap.removeEventListener('mouseleave', onLeave)
@@ -249,34 +265,88 @@ export function Ruler({
     [onScrub],
   )
 
+  /**
+   * 触摸与鼠标分开处理。
+   *
+   * 手机上手势是从刻度尺上开始的概率不低（它就在屏幕下方）。
+   * 原来 pointerdown 立刻 scrubTo：手指刚落下时间轴就跳一下，
+   * 想上下滑动反而一直在被"拖动刻度"，整个页面像卡死。
+   *
+   * 现在的判定：
+   *   - 鼠标：按下即擦动（带指针捕获），和以前一致
+   *   - 触摸：先不擦动。横向位移明显（>10px 且大于纵向）才开始擦；
+   *          抬起时若几乎没动，当作一次点按 → 跳到该位置
+   */
+  const startRef = useRef<{ x: number; y: number } | null>(null)
+
   const handleDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!onScrub) return
-      scrubbingRef.current = true
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId)
-      } catch {
-        // 某些环境（合成事件 / 指针已释放）会抛 InvalidPointerId；
-        // 抓不到指针也不影响一次性的跳转。
+      startRef.current = { x: e.clientX, y: e.clientY }
+
+      if (e.pointerType === 'mouse') {
+        scrubbingRef.current = true
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId)
+        } catch {
+          // 合成事件 / 指针已释放时会抛 InvalidPointerId，忽略即可
+        }
+        scrubTo(e.clientX)
       }
-      scrubTo(e.clientX)
     },
     [onScrub, scrubTo],
   )
 
   const handleMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      const start = startRef.current
+      if (!start) return
+
+      if (e.pointerType !== 'mouse' && !scrubbingRef.current) {
+        const dx = Math.abs(e.clientX - start.x)
+        const dy = Math.abs(e.clientY - start.y)
+        // 纵向为主 → 交给页面滚动，不再参与擦动
+        if (dy > 10 && dy > dx) {
+          startRef.current = null
+          return
+        }
+        if (dx > 10 && dx > dy) {
+          scrubbingRef.current = true
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+          } catch {
+            /* 忽略 */
+          }
+          scrubTo(e.clientX)
+        }
+        return
+      }
+
       if (scrubbingRef.current) scrubTo(e.clientX)
     },
     [scrubTo],
   )
 
-  const handleUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    scrubbingRef.current = false
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
-  }, [])
+  const handleUp = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const start = startRef.current
+      const wasScrubbing = scrubbingRef.current
+      scrubbingRef.current = false
+      startRef.current = null
+
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+
+      // 触摸且几乎没动：当成点按，跳到手指位置
+      if (e.pointerType !== 'mouse' && start && !wasScrubbing) {
+        const dx = Math.abs(e.clientX - start.x)
+        const dy = Math.abs(e.clientY - start.y)
+        if (dx < 10 && dy < 10) scrubTo(e.clientX)
+      }
+    },
+    [scrubTo],
+  )
 
   return (
     <div

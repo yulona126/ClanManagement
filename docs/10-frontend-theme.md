@@ -50,6 +50,14 @@
 | `frontend/index.html` | **首帧内联脚本**（先加 `.dark` 再绘制，避免白闪）；key 与 `theme.ts` 一致 |
 | `src/antd/theme.ts` | `antdDarkToken`：antd 的颜色 token 是写死的 hex，必须单独给深色值 |
 
+**canvas / SVG 里不要写死颜色**：`Ruler.tsx` 的刻度原先用 `ctx.strokeStyle = '#000'`，
+浅色下正常，深色主题里就是黑线画在黑底上，整把刻度尺等于消失。
+正确做法是从 CSS 变量（或继承的 `color`）读，并在主题切换时重读 ——
+见 `Ruler.tsx` 里的 `MutationObserver`。
+
+同理，凡是「底色 = `--tl-ink`」的反白按钮，文字必须用 `--color-on-accent`，
+写死 `#fff` 会在深色下变成白底白字。
+
 注意：antd 的颜色是**写死 hex**（要推导 hover/active），只切 `darkAlgorithm` 不够 ——
 `<App>` 包裹层的 `colorText`、`Input` 的 `colorBgContainer` 会压过算法，
 所以 `theme.ts` 导出 `buildAntdTheme(palette, algorithm)`，按浅/深两套调色板各构造一次。

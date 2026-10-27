@@ -126,6 +126,7 @@ flowchart LR
 | 数据源 | **真实动态**：`frontend/src/features/timeline/moments.ts` 拉取 `/api/workspaces/{id}/records/` 全部分页，映射为轨道项。按时间**正序**排列（第 1 张是最早的记录） |
 | 图片 | 每条记录取**首张视觉素材**（优先图片，其次视频封面）；无图记录渲染为文字卡片，不塞假占位图 |
 | 结构 | 开场遮罩 → 巨字标逐字上抬 → 横向轨道（左右可无限翻阅至两端）→ 单行读数 → 底部刻度尺 |
+| 触屏手势 | 滑动 = 滚动（刻度尺与卡片都**不**拦截纵向手势）；点按刻度尺才跳转；卡片点按才开大图 |
 | 滚动 | **纵向滚动** → **GSAP ScrollTrigger** 映射为横向位移，1px 纵向 = 1px 横向。wheel 由 `Rail.tsx` 接管（`preventDefault` + `scrollBy`）：这套布局下原生 wheel 滚动并不总是响应，接管可保证各浏览器一致且不会重复滚动；`→`/`←`、PageDown、End、滚动条均可用 |
 | 轨道 | [`Rail.tsx`](../frontend/src/features/timeline/Rail.tsx)：`position: fixed` 钉在视口，只写容器 `transform`；`←` `→`（或 `J` `K`）跳转，点击图片开大图 |
 | 卡片标记 | 编号在图上沿、标签（关系称呼 + 年月）在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
