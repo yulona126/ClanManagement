@@ -85,6 +85,15 @@ export function Rail({
   const syncIndexRef = useRef<() => void>(() => {})
   /** 统一的程序化滚动入口（键盘 / 刻度尺共用，保证标记清理逻辑一致）。 */
   const jumpToRef = useRef<(y: number) => void>(() => {})
+  /** 当前轨道的位移量（循环折叠到 0..period） */
+  const shiftRef = useRef(0)
+  /**
+   * 把「位移量 → 画面」这段渲染暴露给触摸拖拽用。
+   *
+   * 桌面走 ScrollTrigger，手机走横向拖拽，两条路径最终都调用同一个
+   * applyShift：保证 transform、可见性裁剪、下标、刻度尺进度只有一处实现。
+   */
+  const renderShiftRef = useRef<(shift: number) => void>(() => {})
 
   /**
    * 轨道左右各留 pad = 视口一半 − 卡片一半 的内边距。
@@ -98,6 +107,16 @@ export function Rail({
     const slideW = nodes?.[0] ? (nodes[0] as HTMLElement).offsetWidth : 0
     return Math.max(0, Math.round(vw / 2 - slideW / 2))
   }
+
+  /**
+   * 滚动减速比：手机上同样的手指滑动要让轨道走得更慢。
+   *
+   * 位移是「纵向滚动 1px → 横向 1px」，手机上卡片宽、行程短，
+   * 一次惯性滑动就能翻好几张，读起来太快。
+   * 这里把**滚动行程**拉长（位移不变），等于给整条轨道加了阻尼：
+   * 滑同样距离，轨道只前进 1/gain。
+   */
+  const scrollGain = () => (window.innerWidth < 650 ? 1.75 : 1)
 
   /** 更新占位高度，返回「一个循环周期」的位移量。 */
   const measure = () => {
@@ -130,7 +149,9 @@ export function Rail({
       firstOfCopyB.offsetLeft - firstOfCopyA.offsetLeft,
     )
 
-    spacer.style.height = `${Math.round(window.innerHeight + period)}px`
+    spacer.style.height = `${Math.round(
+      window.innerHeight + period * scrollGain(),
+    )}px`
     return period
   }
 
@@ -148,6 +169,38 @@ export function Rail({
     const track = trackRef.current
     const spacer = spacerRef.current
     if (!track || !spacer) return
+
+    /**
+     * 把轨道位移写到画面上。
+     *
+     * 唯一的渲染入口：ScrollTrigger（桌面纵向滚动）和触摸拖拽（手机横滑）
+     * 都走这里，避免两套逻辑对不齐。
+     */
+    const applyShift = (nextShift: number) => {
+      const period = measure()
+      if (!period) return
+      const shift = gsap.utils.wrap(0, period, nextShift)
+      shiftRef.current = shift
+
+      const vw = viewportRef.current?.clientWidth ?? 0
+      gsap.set(track, { x: -shift })
+
+      const nodes = track.children
+      for (let i = 0; i < nodes.length; i += 1) {
+        const el = nodes[i] as HTMLElement
+        const left = el.offsetLeft - shift
+        el.style.visibility =
+          left + el.offsetWidth > -80 && left < vw + 80 ? 'visible' : 'hidden'
+      }
+
+      const idx = indexAt(shift, vw)
+      if (!jumpingRef.current && idx !== indexRef.current) {
+        indexRef.current = idx
+        onIndexChange(idx)
+      }
+      onProgress(shift / period)
+    }
+    renderShiftRef.current = applyShift
 
     /** 游标（视口中心）下面压着哪张。用循环后的坐标命中，第二份拷贝折回前半段。 */
     const indexAt = (shift: number, vw: number): number => {
@@ -196,40 +249,13 @@ export function Rail({
           measure()
         },
         onUpdate: (self) => {
-          const period = measure()
           /*
-           * **无限循环**：轨道位移取模，文档滚动保持线性。
-           *
-           * 为什么必须循环：滚动带惯性（触控板 / 触摸甩动），若位移在两端夹紧，
-           * 撞底时 GSAP 的平滑与浏览器惯性会互相顶，出现明显顿挫。
-           * 参考站同样是无限循环（`gsap.utils.wrap`）。
-           *
-           * shift = wrap(0, period, pos)：
-           *   pos=0 时 shift=0 —— 居中由容器的左右 padding 提供；
-           *   若把 pad 再加进 shift，第 1 张会被推到屏幕最左
-           *   （实测 screenLeft=0，而它应停在 512）
-           *   pos 增长到 period 时回到同一画面 → 无缝接回开头
+           * 桌面：纵向滚动线性映射为位移（1px 对 1px），再交给 applyShift 取模渲染。
+           * 手机上这条路径仍然可用（竖向滑也能走），但主要手势是横向拖拽。
            */
-          const pos = self.progress * period
-          const shift = gsap.utils.wrap(0, period, pos)
-          onProgress(self.progress)
-
-          gsap.set(track, { x: -shift })
-
-          const vw = viewportRef.current?.clientWidth ?? 0
-          const nodes = track.children
-          for (let i = 0; i < nodes.length; i += 1) {
-            const el = nodes[i] as HTMLElement
-            const left = el.offsetLeft - shift
-            el.style.visibility =
-              left + el.offsetWidth > -80 && left < vw + 80 ? 'visible' : 'hidden'
-          }
-
-          const idx = indexAt(shift, vw)
-          if (!jumpingRef.current && idx !== indexRef.current) {
-            indexRef.current = idx
-            onIndexChange(idx)
-          }
+          const period = measure()
+          if (!period) return
+          applyShift(self.progress * period)
         },
       })
     })
@@ -242,6 +268,7 @@ export function Rail({
       ctx.revert()
       stRef.current = null
       syncIndexRef.current = () => {}
+      renderShiftRef.current = () => {}
     }
   }, [moments, onIndexChange, onProgress])
 
@@ -341,6 +368,122 @@ export function Rail({
 
     window.addEventListener('wheel', onWheel, { passive: false })
     return () => window.removeEventListener('wheel', onWheel)
+  }, [])
+
+  /*
+   * 横向拖拽（手机主手势）。
+   *
+   * 为什么需要它：内容是**横向**的胶片，但之前只能靠纵向滚动驱动 ——
+   * 手指上下滑去翻左右排列的东西，违反直觉。这里补上直接的横向拖动：
+   *   - 跟手 1:1（拖多少走多少，和刷照片一致）
+   *   - 松手带一点惯性，然后吸附到最近一张（不会停在半张卡上）
+   *   - 结束后把 window.scrollY 对齐到同一进度，避免桌面那套 ScrollTrigger
+   *     下次刷新时把画面拉回旧位置
+   *
+   * 只接管触摸/触控笔，鼠标仍走滚动（桌面拖拽会和文字选择打架）。
+   */
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    let dragging = false
+    let startX = 0
+    let startShift = 0
+    let lastX = 0
+    let lastT = 0
+    let velocity = 0
+    /** 本次手势的最大横向位移；用来区分「横滑」和「竖滑」 */
+    let maxDx = 0
+    /** 被系统接管（变成纵向滚动）时置位，抬手不做吸附 */
+    let cancelled = false
+
+    const slideStep = (): number => {
+      const nodes = trackRef.current?.children
+      if (!nodes || nodes.length < 2) return 1
+      const a = nodes[0] as HTMLElement
+      const b = nodes[1] as HTMLElement
+      return Math.max(1, b.offsetLeft - a.offsetLeft)
+    }
+
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return
+      dragging = true
+      cancelled = false
+      maxDx = 0
+      startX = lastX = e.clientX
+      startShift = shiftRef.current
+      lastT = performance.now()
+      velocity = 0
+      // 打断上一次吸附动画
+      gsap.killTweensOf(viewport)
+    }
+
+    const onMove = (e: PointerEvent) => {
+      if (!dragging) return
+      const now = performance.now()
+      const dt = now - lastT
+      if (dt > 0) velocity = (e.clientX - lastX) / dt
+      lastX = e.clientX
+      lastT = now
+      const dx = e.clientX - startX
+      maxDx = Math.max(maxDx, Math.abs(dx))
+      renderShiftRef.current(startShift - dx)
+    }
+
+    const onCancel = () => {
+      // 浏览器把手势判定为纵向滚动：交还控制权，不要吸附、不要写滚动位置，
+      // 否则会把刚滚出来的距离又抹回去（表现为「竖着滑完全没反应」）。
+      cancelled = true
+      dragging = false
+    }
+
+    const onUp = () => {
+      if (!dragging) return
+      dragging = false
+
+      // 竖向手势（或几乎没动）：不接管
+      if (cancelled || maxDx < 8) return
+
+      const period = Math.max(1, slideStep() * Math.max(1, (trackRef.current?.children.length ?? 2) / 2))
+      const step = slideStep()
+      // 惯性：按松手瞬间的速度多走一段（180ms 的余量），再吸附到最近一张
+      const projected = shiftRef.current - velocity * 180
+      const target = Math.round(projected / step) * step
+
+      const state = { v: shiftRef.current }
+      gsap.to(state, {
+        v: target,
+        duration: 0.45,
+        ease: 'power3.out',
+        overwrite: true,
+        onUpdate: () => renderShiftRef.current(state.v),
+        onComplete: () => {
+          // 对齐文档滚动位置：让纵向滚动这条路径从同一进度继续
+          const max = Math.max(
+            0,
+            document.documentElement.scrollHeight - window.innerHeight,
+          )
+          if (!max) return
+          const progress = gsap.utils.wrap(0, period, target) / period
+          jumpingRef.current = true
+          window.scrollTo({ top: progress * max, behavior: 'auto' })
+          requestAnimationFrame(() => {
+            jumpingRef.current = false
+          })
+        },
+      })
+    }
+
+    viewport.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    return () => {
+      viewport.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+    }
   }, [])
 
   /* ---------------------------------------------------------------- 键盘 */

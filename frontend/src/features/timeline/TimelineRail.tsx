@@ -105,7 +105,7 @@ export function TimelineRail({
       <p className={`tlr-scrollhint${progress > 0.002 ? ' is-hidden' : ''}`} aria-hidden="true">
         {/* 触屏设备上"滚动"的说法不对，用两段文案按指针能力切换 */}
         <span className="tlr-scrollhint__desktop">向下滚动 翻阅时间轴</span>
-        <span className="tlr-scrollhint__touch">上滑 翻阅时间轴</span>
+        <span className="tlr-scrollhint__touch">左右滑动 翻阅时间轴</span>
         <i className="tlr-scrollhint__arrow" />
       </p>
 

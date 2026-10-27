@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 import { TimelineRail } from './TimelineRail'
 import {
@@ -70,9 +70,17 @@ export function TimelinePage() {
   )
   const months = useMemo(() => groupMonths(moments), [moments])
 
+  /**
+   * 大图是**在 pointerup 上打开**的，而浏览器随后还会补发一次 click。
+   * 这个 click 会落在刚挂上的遮罩上，于是"打开瞬间又被自己关掉"。
+   * 记一下打开时间，短时间内的点击不算"关闭"。
+   */
+  const lightboxOpenedAtRef = useRef(0)
+
   const openLightbox = useCallback((moment: TimelineMoment) => {
     const first = moment.media[0]
     if (!first) return
+    lightboxOpenedAtRef.current = Date.now()
     setLightbox({ src: first.full, alt: first.alt })
   }, [])
 
@@ -241,7 +249,10 @@ export function TimelinePage() {
           role="dialog"
           aria-modal="true"
           aria-label={lightbox.alt}
-          onClick={() => setLightbox(null)}
+          onClick={() => {
+            if (Date.now() - lightboxOpenedAtRef.current < 250) return
+            setLightbox(null)
+          }}
         >
           <img src={lightbox.src} alt={lightbox.alt} />
           <span className="tl-lightbox__hint">
