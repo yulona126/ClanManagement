@@ -1,9 +1,23 @@
 import { VitePWA } from 'vite-plugin-pwa'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { mockApiPlugin } from './vite.mock-api.ts'
 
-export default defineConfig({
+/**
+ * 后端地址可配置。
+ *
+ * 本机常同时跑多个项目，Django 默认的 8001 很可能被别的容器占用
+ * （本项目开发时就被另一个 todolist 占过）。写死端口会导致
+ * `/api` 打到别人的服务上、表现为「前端连不上后端」。
+ *
+ * 优先级：环境变量 DEV_API_TARGET > frontend/.env 里的同名项 > 默认 8001
+ * 用法：`DEV_API_TARGET=http://127.0.0.1:8002 npm run dev`
+ */
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const devApiTarget = env.DEV_API_TARGET || 'http://127.0.0.1:8001'
+
+  return {
   plugins: [
     react(),
     // 开发期假 API（仅 apply: 'serve'，生产构建不含）
@@ -71,13 +85,14 @@ export default defineConfig({
     // 同源代理：手机只访问 :5180，不必直连后端端口
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://127.0.0.1:8001',
+        target: devApiTarget,
         changeOrigin: true,
       },
     },
   },
+  }
 })

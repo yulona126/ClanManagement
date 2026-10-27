@@ -13,14 +13,37 @@
 
 可选：本机 Homebrew PostgreSQL 16+（不用 Docker 时）。
 
+## 7.1 先跑自检（推荐）
+
+改动环境后，一条命令就能看出哪一层没起来：
+
+```bash
+bash scripts/devcheck.sh
+```
+
+它会依次检查：数据库容器 → 后端 `/api/health/` → 前端 → **经前端代理访问后端**
+（这一步才代表前端真的能连上）→ Django 实际连的 Postgres host:port → 8000/8001 端口冲突。
+
+端口不是默认值时：
+
+```bash
+API_PORT=8000 WEB_PORT=5180 bash scripts/devcheck.sh
+```
+
+---
+
 ## 7.2 一键起库（推荐 Docker）
 
 在仓库根目录：
 
 ```bash
 docker compose up -d db
-docker compose ps   # claner-pg 应为 healthy；宿主机端口 5433
+docker compose ps   # claner-pg 应为 healthy；宿主机端口看 .env 的 POSTGRES_PUBLISH_PORT
 ```
+
+> **端口以 `.env` 为准**：本仓库 `.env` 用 `POSTGRES_PUBLISH_PORT=5434`
+> （5433 在本机被另一个项目占用）。`DATABASE_URL` 必须指向**同一个**端口，
+> 否则会连到别人的库上——症状是 `migrate` 报库不存在，或读写到不相干的数据。
 
 完整一键部署（含前端编译 + API + Nginx）见 [12-deploy.md](./12-deploy.md)：
 
@@ -41,7 +64,18 @@ docker compose up -d
 默认账号（与 `backend/.env.example` 一致）：
 
 - 用户 / 密码 / 库名：`claner` / `claner` / `claner`
-- URL：`postgres://claner:claner@127.0.0.1:5433/claner`
+- URL：`postgres://claner:claner@127.0.0.1:<POSTGRES_PUBLISH_PORT>/claner`
+  （本仓库 `.env` 为 **5434**）
+
+`settings/base.py` 在**没设 `DATABASE_URL`** 时会回退到 `127.0.0.1:5433`。
+本机 5433 可能属于别的项目，所以本地务必在 `.env` 里显式写 `DATABASE_URL`：
+
+```env
+DATABASE_URL=postgres://claner:claner@127.0.0.1:5434/claner
+```
+
+（`docker compose up` 的 `api` 服务自带 `DATABASE_URL=…@db:5432/…`，
+compose 的 `environment` 优先级高于 `env_file`，所以这行不影响容器内运行。）
 
 不用 Docker、改用本机 Postgres 时：自建库后把 `DATABASE_URL` 端口改成 `5432`（或你的实际端口）。
 
@@ -67,19 +101,38 @@ source .venv/bin/activate
 python manage.py runserver 8000
 ```
 
-若 `8000` 已被占用：
+**端口被占用时（本机常见）**：8001 在本机被另一个项目的容器占用过，
+所以本仓库默认用 **8002**：
 
 ```bash
-python manage.py runserver 8001
-# 同时改 frontend/.env：
-# VITE_API_BASE_URL=http://127.0.0.1:8001
+python manage.py runserver 127.0.0.1:8002
 ```
+
+然后让前端知道这个端口——**不用改代码**，在 `frontend/.env` 里写一行：
+
+```env
+DEV_API_TARGET=http://127.0.0.1:8002
+```
+
+`vite.config.ts` 会读它（优先级：环境变量 > `frontend/.env` > 默认 8001）。
+也可以临时用命令行覆盖：
+
+```bash
+DEV_API_TARGET=http://127.0.0.1:8002 npm run dev
+```
+
+> 为什么会「前端连不上后端」：`/api` 走 Vite 代理，代理目标若还指向 8001，
+> 请求会打到**别的项目**上，表现为 404 或奇怪的响应。先用
+> `lsof -nP -iTCP:8001 -sTCP:LISTEN` 确认 8001 是不是自己的 Django。
 
 健康检查：
 
 ```bash
-curl http://127.0.0.1:8000/api/health/
-# 或 :8001
+curl http://127.0.0.1:8002/api/health/
+# {"status":"ok"}
+
+# 再验一次「经前端代理」是否打通（这一步才代表前端真的能连上）
+curl http://127.0.0.1:5180/api/health/
 # {"status":"ok"}
 ```
 
@@ -110,9 +163,9 @@ npm run dev
 
 推荐方式（已配置）：**只访问前端端口**，Vite 把 `/api`、`/media` 代理到本机 Django。
 
-1. 前端 `vite.config.ts`：`server.host: true` + `proxy` → `127.0.0.1:8001`
+1. 前端 `vite.config.ts`：`server.host: true` + `proxy` → `DEV_API_TARGET`（默认 8001）
 2. 前端 `.env`：`VITE_API_BASE_URL=`（空 = 同源，不要写 `127.0.0.1`）
-3. 后端可继续：`python manage.py runserver 8001`（仅本机即可）
+3. 后端可继续：`python manage.py runserver 8002`（仅本机即可；端口与 `DEV_API_TARGET` 一致）
 4. 手机浏览器打开：`http://<电脑局域网IP>:5180/`（例如 `http://192.168.50.247:5180/`）
 5. **两边都要重启**：改 `.env` / `vite.config` 后重启 `npm run dev`；改后端 `.env` 后重启 Django
 6. 本地媒体：`STORAGE_BACKEND=local` 时 `file_url` / `local-put` 使用**相对路径**（`/media/...`、`/api/...`），经 Vite 代理，手机与本机都能显示。`PUBLIC_API_BASE_URL` 可留空。
