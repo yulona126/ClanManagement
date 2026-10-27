@@ -138,6 +138,36 @@ curl http://127.0.0.1:5180/api/health/
 
 Admin：`http://127.0.0.1:8000/admin/`（需先 `createsuperuser`）。
 
+### 测试账号（本地开发）
+
+一条命令建好三档权限的账号，覆盖「谁能发布、谁能进管理台」：
+
+```bash
+cd backend
+PYTHONPATH=. DJANGO_ENV=local .venv/bin/python manage.py seed_demo
+# 容器内：
+docker compose exec api python manage.py seed_demo
+```
+
+| 账号 | 口令 | 角色 | staff | 能做什么 |
+| :--- | :--- | :--- | :--- | :--- |
+| `demo` | `claner123` | owner | 是 | 全部功能 + `/manage` 管理台 + 空间设置 |
+| `mom` | `claner123` | editor | 否 | 发布 / 编辑 / 评论，无设置、无管理台 |
+| `grandma` | `claner123` | viewer | 否 | 只读 + 可评论，无发布 |
+
+细节：
+
+- 会**重置**这三人的口令（已存在也更新），方便按文档直接登录
+- 默认挂到第一个 Workspace；指定别的用 `--workspace-id 2`
+- 改口令用 `--password xxx`
+- **production 环境默认拒绝执行**（弱口令不能上线上）；
+  确实需要 `--force` + 自定义强口令
+- 只动这三个固定账号，不影响其它数据
+
+登录流程：`http://localhost:5180/` → 输入账号 → **选空间** → 进 Feed。
+`/timeline` 用假数据，不依赖后台数据，任何账号都能看。
+
+
 ## 7.4 前端
 
 首次：
