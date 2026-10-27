@@ -1160,6 +1160,13 @@
   cursor: zoom-out;
 }
 
+.tl-lightbox__hint-close {
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .tl-lightbox img {
   max-width: min(92vw, 60rem);
   max-height: 82vh;
@@ -1168,10 +1175,49 @@
 
 .tl-lightbox__hint {
   position: absolute;
-  bottom: 1.5rem;
-  color: rgba(255, 255, 255, 0.7);
+  /*
+   * 必须左右都锚定 + 居中：原来只有 bottom，元素按静态位置摆放，
+   * 一行长文案在手机上会直接顶出屏幕两侧（看起来像"文字卡边"）。
+   */
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.78rem;
   letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-align: center;
+  /* 最多两行，超出省略，不让它继续长 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tl-lightbox__hint-close {
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.tl-lightbox img {
+  /* 给上下留出提示文案的空间 */
+  max-height: min(78vh, calc(100dvh - 8rem));
+}
+
+/*
+ * 打开大图时收起时间轴那一层 chrome（读数 / 刻度尺 / 滑动提示）。
+ * 否则底部的一行读数会和"点击任意处关闭"的提示文案叠在一起。
+ */
+.tl-root.is-lightbox-open .tlr-foot,
+.tl-root.is-lightbox-open .tlr-ruler,
+.tl-root.is-lightbox-open .tlr-scrollhint {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--tl-ease-soft);
 }
 
 /* -------------------------------------------------------------- 减少动效 */

@@ -117,7 +117,11 @@ export function TimelinePage() {
   const recentMonths = months.slice(0, 6)
 
   return (
-    <div className="tl-root tl-root--rail tl-root--scroll">
+    <div
+      className={`tl-root tl-root--rail tl-root--scroll${
+        lightbox ? ' is-lightbox-open' : ''
+      }`}
+    >
       <div className="tl-grain" aria-hidden="true" />
 
       {/* ------------------------------------------------------ 顶部字标 */}
@@ -256,7 +260,8 @@ export function TimelinePage() {
         >
           <img src={lightbox.src} alt={lightbox.alt} />
           <span className="tl-lightbox__hint">
-            {lightbox.alt} · 点击任意处或按 ESC 关闭
+            {lightbox.alt}
+            <span className="tl-lightbox__hint-close">点击任意处或按 ESC 关闭</span>
           </span>
         </div>
       ) : null}
