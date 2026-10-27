@@ -44,3 +44,34 @@ export const clanerRadius = {
   md: 12, // 0.75rem
   lg: 16, // 1rem
 } as const
+
+/**
+ * 深色调色板 —— 与 `src/features/theme/theme.css` 的 `.dark` 一一对应。
+ * 改色时两处一起改（antd 要 hex，CSS 变量可以随便写）。
+ */
+export const clanerDarkPalette = {
+  ink: '#f4f4f2',
+  inkSoft: '#d9d9d5',
+  muted: '#9c9c96',
+  faint: '#6e6e68',
+
+  bg: '#0b0b0b',
+  bgDeep: '#121211',
+  surface: '#141413',
+  border: '#26262a',
+  borderStrong: '#38383d',
+
+  accent: '#f4f4f2',
+  accentHover: '#ffffff',
+  accentSoft: 'rgba(244, 244, 242, 0.1)',
+  accentMist: 'rgba(244, 244, 242, 0.05)',
+
+  ok: '#57c785',
+  okSoft: 'rgba(87, 199, 133, 0.14)',
+  err: '#ef7a7a',
+  errSoft: 'rgba(239, 122, 122, 0.14)',
+  onAccent: '#0b0b0b',
+
+  warning: '#d4a13a',
+  warningSoft: 'rgba(212, 161, 58, 0.14)',
+} as const

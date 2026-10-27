@@ -118,9 +118,9 @@
     repeating-linear-gradient(
       -45deg,
       transparent 0 6px,
-      rgba(17, 17, 17, 0.035) 6px 12px
+      var(--color-accent-mist) 6px 12px
     ),
-    #faf9f7;
+    var(--color-bg-deep);
 }
 
 /* 纯文字记录：把标题当版面主角，而不是塞一张假的占位图 */

@@ -26,6 +26,33 @@
 
 不做：霓虹、毛玻璃、多层阴影、彩色主题、紫色渐变。
 
+### 1.1 深浅主题
+
+浅色是默认；深色由 `.dark` 只重声明 `tokens.css` 的同名变量，
+**组件里不写任何深色变体**（写 `dark:` 式分支必然漏）。
+
+| 项 | 深色取值 |
+| :--- | :--- |
+| 背景 | `#0b0b0b`（`--color-bg`） |
+| 卡片 / 面板 | `#141413`（`--color-surface`） |
+| 主文字 | `#f4f4f2`（`--color-ink`） |
+| 次要文字 | `#9c9c96`（`--color-muted`） |
+| 边框 | `#26262a` / `#38383d` |
+| 反白按钮字 | `--color-on-accent`（深色下翻成黑字） |
+
+实现位置：
+
+| 文件 | 作用 |
+| :--- | :--- |
+| `src/features/theme/theme.css` | `.dark` 变量覆盖 + View Transition 的 `::view-transition-*` 规则 |
+| `src/features/theme/theme.ts` | 三态状态机、圆形扩散动效、系统配色跟随 |
+| `src/features/theme/ThemeSwitch.tsx` | 三档开关（放进胶囊菜单） |
+| `frontend/index.html` | **首帧内联脚本**（先加 `.dark` 再绘制，避免白闪）；key 与 `theme.ts` 一致 |
+| `src/antd/theme.ts` | `antdDarkToken`：antd 的颜色 token 是写死的 hex，必须单独给深色值 |
+
+注意：antd 的 `<App>` 包裹层会输出 `colorText`，只切 `darkAlgorithm` 不够 ——
+`antdDarkToken` 里的显式颜色优先级更高，两者要一起换。
+
 ---
 
 ## 2. 交互规则（固定）

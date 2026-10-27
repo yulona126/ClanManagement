@@ -1,0 +1,84 @@
+/**
+ * Claner — Dark 主题 + 主题切换动效
+ *
+ * 只在 `.dark` 下重声明 `tokens.css` 里的同名变量，组件一行都不用改。
+ * 不在这里给变量加 transition —— 过渡交给 View Transition 的整页快照，
+ * 逐属性渐变会在切换瞬间互相错位。
+ */
+
+.dark {
+  color-scheme: dark;
+
+  /* —— 文字 —— */
+  --color-ink: #f4f4f2;
+  --color-ink-soft: #d9d9d5;
+  --color-muted: #9c9c96;
+  --color-faint: #6e6e68;
+
+  /* —— 表面 —— */
+  --color-bg: #0b0b0b;
+  --color-bg-deep: #121211;
+  --color-surface: #141413;
+  --color-panel: #171716;
+  --color-panel-solid: #171716;
+  --color-border: #26262a;
+  --color-border-strong: #38383d;
+
+  /* —— 主色 —— */
+  --color-accent: #f4f4f2;
+  --color-accent-hover: #ffffff;
+  --color-accent-soft: rgba(244, 244, 242, 0.1);
+  --color-accent-mist: rgba(244, 244, 242, 0.05);
+
+  --color-dawn: #f4f4f2;
+  --color-dawn-soft: transparent;
+  --color-sky: #9c9c96;
+  --color-sky-soft: rgba(244, 244, 242, 0.06);
+
+  /* —— 状态 —— */
+  --color-ok: #57c785;
+  --color-ok-soft: rgba(87, 199, 133, 0.14);
+  --color-err: #ef7a7a;
+  --color-err-soft: rgba(239, 122, 122, 0.14);
+  --color-danger: #ef7a7a;
+
+  /* 反白按钮上的文字：浅色主题是白字黑底，深色主题反过来 */
+  --color-on-accent: #0b0b0b;
+  --color-on-ink: #0b0b0b;
+
+  --bg-atmosphere: #0b0b0b;
+
+  /* 朋友圈式评论 / 次级面板的底色 */
+  --color-surface-muted: #1a1a19;
+  /* 链接色（朋友圈的名字、评论入口） */
+  --color-link: #8ba6d8;
+  --color-link-hover: #a6bce4;
+
+  --shadow-sm: none;
+  --shadow-panel: none;
+}
+
+/* 深色下页面四周的光晕要收掉，否则会出现一圈脏灰 */
+.dark body {
+  background: var(--bg-atmosphere);
+}
+
+/*
+ * 主题切换：关掉 View Transition 默认的整页交叉淡入，
+ * 让 clip-path 的圆形扩散独占动效（否则边缘发灰）。
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-switching::view-transition-old(root),
+  html.theme-switching::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-switching::view-transition-old(root) {
+    z-index: 1;
+  }
+
+  html.theme-switching::view-transition-new(root) {
+    z-index: 2;
+  }
+}

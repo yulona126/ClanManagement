@@ -40,6 +40,11 @@
   --color-danger: #b42318;
   --color-on-accent: #ffffff;
   --color-on-ink: #ffffff;
+  /* 朋友圈式评论块 / 次级面板底色（深色主题在 theme.css 里重声明） */
+  --color-surface-muted: #f6f6f4;
+  /* 链接色：评论名字、评论入口（微信同款蓝） */
+  --color-link: #576b95;
+  --color-link-hover: #465a84;
 
   --bg-atmosphere: #ffffff;
 
