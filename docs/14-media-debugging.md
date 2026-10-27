@@ -159,6 +159,25 @@ python3 -m pip install pillow
 backend/.venv/bin/python scripts/check_image.py <url>
 ```
 
+### 批量收集所有图片 URL
+
+想知道「到底有多少张黑图」，需要把全部图片 URL 拿到手。在浏览器控制台跑：
+
+```text
+1. 打开 http://localhost:5180/ 并用线上账号登录（配了 DEV_API_TARGET 时即线上数据）
+2. DevTools → Console → 粘贴 scripts/collect_media_urls.js 全部内容 → 回车
+3. URL 列表会打印并复制到剪贴板
+```
+
+然后一次性判定：
+
+```bash
+backend/.venv/bin/python scripts/check_image.py --file urls.txt
+```
+
+输出末尾会汇总「检查 N 张，有问题 M 张」，并逐条给出亮度/类型/缩略图结果。
+只做 GET，不会改任何数据。
+
 ## 5. 快速定位清单
 
 ```bash
