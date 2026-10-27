@@ -38,13 +38,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [currentId, setCurrentIdState] = useState<number | null>(readStoredId)
-  const [loading, setLoading] = useState(false)
+  /*
+   * 初值必须是 true：reload() 在 effect 里才跑，若初值为 false，
+   * 首帧就是「current=null 且 loading=false」，RequireWorkspace 会立即判定
+   * 「没有选中空间」并跳去 /spaces —— 表现为硬刷新任何空间页（/album、/family）
+   * 都被弹回选空间页。
+   */
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     if (!user) {
       setWorkspaces([])
       setCurrentIdState(null)
+      setLoading(false)
       return
     }
     setLoading(true)

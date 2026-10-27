@@ -61,6 +61,9 @@ def public_url(object_key: str) -> str:
 def thumbnail_url(object_key: str, media_type: str, file_url: str | None = None) -> str:
     """Build a display URL for list/grid covers (image resize or video snapshot)."""
     url = file_url or public_url(object_key)
+    # 相对路径（本地 MEDIA_URL，如 /media/...）不是 OSS 对象，不能拼图片处理参数
+    if not url.lower().startswith(("http://", "https://")):
+        return url if media_type == "image" else ""
     if settings.STORAGE_BACKEND != "oss":
         # Local: images use the file itself; video covers are uploaded separately.
         return url if media_type == "image" else ""

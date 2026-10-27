@@ -167,6 +167,35 @@ docker compose exec api python manage.py seed_demo
 登录流程：`http://localhost:5180/` → 输入账号 → **选空间** → 进 Feed。
 `/timeline` 用假数据，不依赖后台数据，任何账号都能看。
 
+### 演示内容（动态 / 图片 / 相册）
+
+账号有了但空间是空的（Feed 只有「还没有动态」）。灌一批演示数据：
+
+```bash
+cd backend
+PYTHONPATH=. DJANGO_ENV=local .venv/bin/python manage.py seed_demo_content
+# 容器内：
+docker compose exec api python manage.py seed_demo_content
+
+# 换一批 / 重来（先清掉测试账号发表的内容）
+... seed_demo_content --reset
+# 多灌一些
+... seed_demo_content --records 20
+```
+
+会生成 12 条跨 60 天的动态、17 张图片、一个「夏夏的相册」。
+
+设计上刻意避开两个坑：
+
+- **不写 OSS**：图片是本地生成的 SVG，落到 `backend/media/`，`file_url` 用相对路径 `/media/...`。
+  开发机通常是 `STORAGE_BACKEND=oss`，走真实上传会把测试图塞进你的桶。
+  因此这些图**只在 `DEBUG=true` + `/media/` 可访问时**显示（本地开发满足）。
+- **不依赖 Pillow**：占位图用内联 SVG，任何环境都能跑。
+
+`production` 环境会拒绝执行（避免污染线上）。
+
+`--reset` 只删**测试账号**（demo/mom/grandma）在该空间发表的动态与相册，不动真实数据。
+
 
 ## 7.4 前端
 
