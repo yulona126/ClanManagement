@@ -2,13 +2,19 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
-import type { Moment } from './mockMoments'
+import type { TimelineMoment } from './moments'
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin)
 
 export type RailHandle = {
-  /** 跳到第 index 张（刻度尺点按 / 索引跳转用）。 */
-  goTo: (index: number) => void
+  /**
+   * 跳到整条轨道的某个进度（0–1）。
+   *
+   * 刻度尺点按走这里，而不是「比例 → 下标 → 再换算成滚动位置」：
+   * 刻度尺本身就是进度的线性表示，转两道会被卡片间距放大成半个卡片的偏差
+   * （实测点 50% 会落到第 8 张而不是第 7 张）。
+   */
+  goToProgress: (progress: number) => void
 }
 
 /**
@@ -34,7 +40,7 @@ export function Rail({
   onKeyNav,
   handleRef,
 }: {
-  moments: Moment[]
+  moments: TimelineMoment[]
   /** 用户明确要求跳转到的下标（键盘 / 刻度尺 / 索引）；只有它才驱动滚动 */
   targetIndex: number
   /** 游标当前压着的下标（由滚动推导，仅用于显示与高亮） */
@@ -42,7 +48,7 @@ export function Rail({
   onIndexChange: (index: number) => void
   /** 整条轨道的滚动进度（0–1），给刻度尺用 */
   onProgress: (progress: number) => void
-  onSelect: (moment: Moment) => void
+  onSelect: (moment: TimelineMoment) => void
   /** 键盘翻页：同时推进 target（驱动滚动）与 active（即时高亮） */
   onKeyNav: (index: number) => void
   handleRef?: RefObject<RailHandle | null>
@@ -64,6 +70,15 @@ export function Rail({
   /** 下一次 targetIndex 变化是否来自用户明确操作（决定要不要滚） */
   const wantScrollRef = useRef(true)
   const stRef = useRef<ScrollTrigger | null>(null)
+  /**
+   * 把「当前进度 → 游标压着的下标」这段逻辑暴露给跳转补间用。
+   *
+   * 为什么不能只靠 ScrollTrigger.update()：进度没变时它不会重跑 onUpdate，
+   * 而程序化滚动结束后正好是"进度已变、事件已停"的状态，于是编号不刷新。
+   */
+  const syncIndexRef = useRef<() => void>(() => {})
+  /** 统一的程序化滚动入口（键盘 / 刻度尺共用，保证标记清理逻辑一致）。 */
+  const jumpToRef = useRef<(y: number) => void>(() => {})
 
   /**
    * 轨道左右各留 pad = 视口一半 − 卡片一半 的内边距。
@@ -128,6 +143,40 @@ export function Rail({
     const spacer = spacerRef.current
     if (!track || !spacer) return
 
+    /** 游标（视口中心）下面压着哪张。用循环后的坐标命中，第二份拷贝折回前半段。 */
+    const indexAt = (shift: number, vw: number): number => {
+      const nodes = track.children
+      const center = shift + vw / 2
+      const len = nodes.length
+      const half = len / 2
+      for (let i = 0; i < len; i += 1) {
+        const el = nodes[i] as HTMLElement
+        if (center >= el.offsetLeft && center < el.offsetLeft + el.offsetWidth) {
+          return i % half
+        }
+      }
+      return indexRef.current
+    }
+
+    /**
+     * 立刻按「当前滚动进度」重算一次下标（不依赖 onUpdate 被再次触发）。
+     * 跳转补间结束时调用 —— 那时进度已变但滚动事件已经停了。
+     */
+    syncIndexRef.current = () => {
+      const st = stRef.current
+      const viewport = viewportRef.current
+      if (!st || !viewport) return
+      const period = measure()
+      if (!period) return
+      const vw = viewport.clientWidth
+      const shift = gsap.utils.wrap(0, period, st.progress * period)
+      const idx = indexAt(shift, vw)
+      if (idx !== indexRef.current) {
+        indexRef.current = idx
+        onIndexChange(idx)
+      }
+    }
+
     const ctx = gsap.context(() => {
       measure()
 
@@ -149,14 +198,14 @@ export function Rail({
            * 撞底时 GSAP 的平滑与浏览器惯性会互相顶，出现明显顿挫。
            * 参考站同样是无限循环（`gsap.utils.wrap`）。
            *
-           * shift = wrap(0, period, pos + pad)：
-           *   pos=0 时 shift=pad → 第 1 张正好在游标下
+           * shift = wrap(0, period, pos)：
+           *   pos=0 时 shift=0 —— 居中由容器的左右 padding 提供；
+           *   若把 pad 再加进 shift，第 1 张会被推到屏幕最左
+           *   （实测 screenLeft=0，而它应停在 512）
            *   pos 增长到 period 时回到同一画面 → 无缝接回开头
            */
-          const vw2 = viewportRef.current?.clientWidth ?? 0
-          const pad = padFor(vw2)
           const pos = self.progress * period
-          const shift = gsap.utils.wrap(0, period, pos + pad)
+          const shift = gsap.utils.wrap(0, period, pos)
           onProgress(self.progress)
 
           gsap.set(track, { x: -shift })
@@ -170,18 +219,7 @@ export function Rail({
               left + el.offsetWidth > -80 && left < vw + 80 ? 'visible' : 'hidden'
           }
 
-          // 游标（视口中心）下面压着哪张。用循环后的坐标命中，第二份拷贝要折回前半段。
-          const center = shift + vw / 2
-          const len = nodes.length
-          const half = len / 2
-          let idx = indexRef.current
-          for (let i = 0; i < len; i += 1) {
-            const el = nodes[i] as HTMLElement
-            if (center >= el.offsetLeft && center < el.offsetLeft + el.offsetWidth) {
-              idx = i % half
-              break
-            }
-          }
+          const idx = indexAt(shift, vw)
           if (!jumpingRef.current && idx !== indexRef.current) {
             indexRef.current = idx
             onIndexChange(idx)
@@ -197,6 +235,7 @@ export function Rail({
       window.removeEventListener('resize', onResize)
       ctx.revert()
       stRef.current = null
+      syncIndexRef.current = () => {}
     }
   }, [moments, onIndexChange, onProgress])
 
@@ -212,31 +251,45 @@ export function Rail({
     const ratio = moments.length > 1 ? targetIndex / (moments.length - 1) : 0
     const y = st.start + (st.end - st.start) * ratio
     indexRef.current = targetIndex
-    jumpingRef.current = true
-    gsap.to(window, {
-      scrollTo: y,
-      duration: 0.6,
-      ease: 'power2.out',
-      overwrite: true,
-      onComplete: () => {
-        jumpingRef.current = false
-      },
-      onInterrupt: () => {
-        jumpingRef.current = false
-      },
-    })
+    jumpToRef.current(y)
   }, [targetIndex, moments.length])
+
+  /** 统一的程序化滚动：滚动中屏蔽下标回写，结束后补算一次。 */
+  useEffect(() => {
+    jumpToRef.current = (y: number) => {
+      jumpingRef.current = true
+      gsap.to(window, {
+        scrollTo: y,
+        duration: 0.6,
+        ease: 'power2.out',
+        overwrite: true,
+        onComplete: () => {
+          jumpingRef.current = false
+          // 跳转期间 onUpdate 跳过了下标同步，停下后必须补一次，
+          // 否则画面跳过去了、左下角编号还停在旧值。
+          syncIndexRef.current()
+        },
+        onInterrupt: () => {
+          jumpingRef.current = false
+          syncIndexRef.current()
+        },
+      })
+    }
+  }, [])
 
   /** 对外暴露命令式跳转（刻度尺调用）。 */
   useEffect(() => {
     if (!handleRef) return
     handleRef.current = {
-      goTo(target: number) {
+      goToProgress(progress: number) {
+        const st = stRef.current
+        if (!st) return
         wantScrollRef.current = true
-        onIndexChange(target)
+        const p = Math.min(1, Math.max(0, progress))
+        jumpToRef.current(st.start + (st.end - st.start) * p)
       },
     }
-  }, [handleRef, onIndexChange])
+  }, [handleRef])
 
   /*
    * 滚轮 → 无限滚动。
@@ -333,17 +386,25 @@ export function Rail({
                 >
                   {m.media[0] ? (
                     <img
-                      src={m.media[0].placeholder}
+                      src={m.media[0].src}
                       alt={copy === 0 ? m.media[0].alt : ''}
                       loading="lazy"
                       draggable={false}
                     />
                   ) : (
-                    <span className="tlr-slide__plain" aria-hidden="true" />
+                    /* 纯文字记录：没有图，用标题排版成一张卡片，不塞占位图的假象 */
+                    <span className="tlr-slide__plain">
+                      <b className="tlr-slide__plain-title">
+                        {m.title || m.content.slice(0, 40) || '一条记录'}
+                      </b>
+                      <i className="tlr-slide__plain-mark" aria-hidden="true">
+                        {m.created_at.slice(5).replace('-', '.')}
+                      </i>
+                    </span>
                   )}
                 </span>
                 <span className="tlr-slide__label" aria-hidden="true">
-                  {m.tags[0] ?? '日常'} · {m.created_at.slice(0, 7).replace('-', '/')}
+                  {m.label} · {m.created_at.slice(0, 7).replace('-', '/')}
                 </span>
               </article>
             )),

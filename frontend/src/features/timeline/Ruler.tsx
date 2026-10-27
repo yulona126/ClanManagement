@@ -189,6 +189,15 @@ export function Ruler({
         if (offset !== lastLabelOffset) {
           track.style.transform = `translate3d(${-offset}px,0,0)`
           lastLabelOffset = offset
+          // 贴到左右边缘的标签会被切掉半个字（最左的「8月」曾只剩「月」），
+          // 靠边时淡出，比切一半干净。
+          const width = canvasRef.current?.clientWidth ?? 0
+          for (let i = 0; i < track.children.length; i += 1) {
+            const el = track.children[i] as HTMLElement
+            const screenX = el.offsetLeft - offset
+            el.style.opacity =
+              screenX < 18 || screenX > width - 18 ? '0' : '1'
+          }
         }
       }
 
@@ -244,7 +253,12 @@ export function Ruler({
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!onScrub) return
       scrubbingRef.current = true
-      e.currentTarget.setPointerCapture(e.pointerId)
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        // 某些环境（合成事件 / 指针已释放）会抛 InvalidPointerId；
+        // 抓不到指针也不影响一次性的跳转。
+      }
       scrubTo(e.clientX)
     },
     [onScrub, scrubTo],

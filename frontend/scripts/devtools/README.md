@@ -79,7 +79,7 @@ location.href = '/timeline'
 | 开场遮罩 / 字标动画 | [`TimelinePage.tsx`](../src/features/timeline/TimelinePage.tsx) 的 `enter()`、`introOpen` |
 | 筛选逻辑 | 同文件 `filtered`（`useMemo`），按 `monthFilter` / `tagFilter` |
 | 滚动高亮当前条 | 同文件 `activeIndex` 的 `IntersectionObserver` |
-| 假数据改内容 | [`mockMoments.ts`](../src/features/timeline/mockMoments.ts) 的 `SEEDS` 数组 |
+| 让时间轴有内容 | 先跑 `manage.py seed_demo_content` 灌演示动态（见 `docs/07-dev-setup.md`） |
 | 视觉 | [`timeline.css`](../src/features/timeline/timeline.css)，类名 `tl-` 前缀 |
 
 ### DevTools 里几个好用的

@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 import { TimelineRail } from './TimelineRail'
 import {
-  MOMENTS,
-  TIMELINE_MONTHS,
-  TIMELINE_STATS,
-  TIMELINE_SUBJECT,
-  TAG_LABELS,
-  type Moment,
-} from './mockMoments'
+  ageLabel,
+  computeStats,
+  fetchTimelineMoments,
+  groupMonths,
+  type TimelineMoment,
+} from './moments'
 import './timeline.css'
 import './rail.css'
 
 const WORDMARK_LINES = ['MEMORY', 'TAPE']
+
+type LoadState = 'loading' | 'ready' | 'error'
 
 /**
  * 成长胶片 · 沉浸式展示页
@@ -20,7 +21,8 @@ const WORDMARK_LINES = ['MEMORY', 'TAPE']
  * 结构（参考 tlb.betteroff.studio 的 Timeline 页）：
  *   开场遮罩 → 巨字标（逐字上抬）→ 横向图片轨道 + 底部时间刻度尺
  *
- * 整页没有纵向滚动：视口就是轨道，滚轮 / 拖拽都转成横向位移。
+ * 数据来自真实动态（`/api/workspaces/{id}/records/` 全部分页），
+ * 时间正序排列——第 1 张就是最早的那条记录，符合「从头回放」的预期。
  *
  * 进度：**模块一**（轨道 + 刻度尺）已完成；
  * 模块二（月份 / 标签筛选 + 索引抽屉）待接入，见 docs/11-product-ia.md。
@@ -32,12 +34,46 @@ export function TimelinePage() {
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const [scrolled, setScrolled] = useState(false)
 
-  const subjectName = current?.baby_name ?? TIMELINE_SUBJECT.nickname
+  const [moments, setMoments] = useState<TimelineMoment[]>([])
+  // 初值就是 loading：effect 里不再同步 setState（避免级联渲染）
+  const [state, setState] = useState<LoadState>('loading')
+  const [error, setError] = useState<string>('')
 
-  const openLightbox = useCallback((moment: Moment) => {
+  const workspaceId = current?.id ?? null
+  const babyName = current?.baby_name ?? ''
+  const birth = current?.baby_birthday ?? null
+
+  /* ------------------------------------------------------------ 拉数据 */
+  useEffect(() => {
+    if (!workspaceId) return
+    let alive = true
+    fetchTimelineMoments(workspaceId, birth)
+      .then((list) => {
+        if (!alive) return
+        setMoments(list)
+        setError('')
+        setState('ready')
+      })
+      .catch((err: unknown) => {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : '加载失败')
+        setState('error')
+      })
+    return () => {
+      alive = false
+    }
+  }, [workspaceId, birth])
+
+  const stats = useMemo(
+    () => computeStats(moments, birth, current?.photo_count),
+    [moments, birth, current?.photo_count],
+  )
+  const months = useMemo(() => groupMonths(moments), [moments])
+
+  const openLightbox = useCallback((moment: TimelineMoment) => {
     const first = moment.media[0]
     if (!first) return
-    setLightbox({ src: first.placeholder, alt: first.alt })
+    setLightbox({ src: first.full, alt: first.alt })
   }, [])
 
   /* 滚动一段后让字标淡出，避免一直压在最上面 */
@@ -68,9 +104,9 @@ export function TimelinePage() {
     setEntered(true)
   }, [])
 
-  const latest = MOMENTS[0]
-  const firstMonth = TIMELINE_MONTHS[TIMELINE_MONTHS.length - 1]
-  const lastMonth = TIMELINE_MONTHS[0]
+  const oldest = moments[0]
+  const latest = moments[moments.length - 1]
+  const recentMonths = months.slice(0, 6)
 
   return (
     <div className="tl-root tl-root--rail tl-root--scroll">
@@ -101,9 +137,9 @@ export function TimelinePage() {
           <span>
             CLANER<em>®</em>
           </span>
-          <span>/ {TIMELINE_SUBJECT.name.toUpperCase()}</span>
+          <span>/ {(babyName || 'CLANER').toUpperCase()}</span>
           <span>
-            {firstMonth?.year ?? 2025}—{lastMonth?.year ?? 2026}
+            {oldest?.created_at.slice(0, 4) ?? '—'}—{latest?.created_at.slice(0, 4) ?? '—'}
           </span>
         </div>
       </div>
@@ -112,63 +148,89 @@ export function TimelinePage() {
       <div className={`tl-intro${introOpen ? '' : ' is-gone'}`} aria-hidden={!introOpen}>
         <div className="tl-intro__top">
           <span>Claner · Memory Tape</span>
-          <span>{subjectName} 的成长胶片</span>
+          <span>{babyName ? `${babyName} 的成长胶片` : '成长胶片'}</span>
         </div>
 
         <div className="tl-intro__body">
           <span className="tl-intro__eyebrow">
-            A digital capsule for {TIMELINE_SUBJECT.name}
+            A digital capsule for {babyName || 'your family'}
           </span>
-          <p className="tl-intro__quote">{TIMELINE_SUBJECT.tagline}</p>
-          <div className="tl-intro__stats">
-            <span>
-              <b>{TIMELINE_STATS.total}</b> 条动态
-            </span>
-            <span>
-              <b>{TIMELINE_STATS.photos}</b> 张照片
-            </span>
-            <span>
-              <b>{TIMELINE_STATS.months}</b> 个月
-            </span>
-            <span>
-              今天是出生第 <b>{TIMELINE_STATS.currentDay}</b> 天
-            </span>
-          </div>
+          <p className="tl-intro__quote">
+            一天一张照片，把长大的过程卷成一卷胶片。
+          </p>
+
+          {state === 'loading' ? (
+            <div className="tl-intro__stats">
+              <span>正在整理这卷胶片…</span>
+            </div>
+          ) : state === 'error' ? (
+            <div className="tl-intro__stats">
+              <span>加载失败：{error}</span>
+            </div>
+          ) : state === 'ready' && stats.total > 0 ? (
+            <div className="tl-intro__stats">
+              <span>
+                <b>{stats.total}</b> 条动态
+              </span>
+              <span>
+                <b>{stats.photos}</b> 张照片
+              </span>
+              <span>
+                <b>{stats.months}</b> 个月
+              </span>
+              {stats.currentDay !== null ? (
+                <span>
+                  今天是出生第 <b>{stats.currentDay}</b> 天
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="tl-intro__stats">
+              <span>还没有动态，先去发一条吧。</span>
+            </div>
+          )}
         </div>
 
         <div className="tl-intro__bottom">
           <div className="tl-intro__months">
-            {TIMELINE_MONTHS.slice(0, 6).map((g) => (
+            {recentMonths.map((g) => (
               <div key={g.key}>
                 <b>
                   {g.year} · {g.label}
                 </b>
-                {g.tags
-                  .map((t) => `${TAG_LABELS[t.tag] ?? t.tag} (${t.count})`)
-                  .join(' ／ ')}
+                {g.count} 条
               </div>
             ))}
           </div>
-          <button type="button" className="tl-intro__enter" onClick={enter}>
-            进入时间轴
-            <svg viewBox="0 0 12 10" aria-hidden="true">
-              <path d="M7.36 9.49 6.34 8.53l2.93-3.11H0V4.05h9.27L6.34.94 7.36 0l4.39 4.74-4.39 4.75Z" />
-            </svg>
-          </button>
+
+          {state === 'ready' && stats.total > 0 ? (
+            <button type="button" className="tl-intro__enter" onClick={enter}>
+              进入时间轴
+              <svg viewBox="0 0 12 10" aria-hidden="true">
+                <path d="M7.36 9.49 6.34 8.53l2.93-3.11H0V4.05h9.27L6.34.94 7.36 0l4.39 4.74-4.39 4.75Z" />
+              </svg>
+            </button>
+          ) : state === 'ready' ? (
+            <a className="tl-intro__enter" href="/publish">
+              去发第一条
+              <svg viewBox="0 0 12 10" aria-hidden="true">
+                <path d="M7.36 9.49 6.34 8.53l2.93-3.11H0V4.05h9.27L6.34.94 7.36 0l4.39 4.74-4.39 4.75Z" />
+              </svg>
+            </a>
+          ) : null}
         </div>
       </div>
 
       {/* ------------------------------------------- 模块一：轨道 + 刻度尺 */}
-      <TimelineRail moments={MOMENTS} onOpen={openLightbox} />
+      {state === 'ready' && moments.length > 0 ? (
+        <TimelineRail moments={moments} onOpen={openLightbox} />
+      ) : null}
 
       {/* ---------------------------------------------------------- 角落 */}
-      {/*
-        左下的「第几张 + 日期」由 TimelineRail 渲染（.tlr-foot），
-        所以这里只放右下角，避免两块文字叠在一起。
-      */}
       {latest ? (
         <span className="tl-corner tl-corner--right">
-          最新 {latest.created_at.slice(0, 10)}
+          最新 {latest.created_at}
+          {latest.dayIndex !== null ? ` · ${ageLabel(latest.dayIndex)}` : ''}
         </span>
       ) : null}
 
@@ -183,7 +245,7 @@ export function TimelinePage() {
         >
           <img src={lightbox.src} alt={lightbox.alt} />
           <span className="tl-lightbox__hint">
-            点击任意处或按 ESC 关闭 · 展示用占位图
+            {lightbox.alt} · 点击任意处或按 ESC 关闭
           </span>
         </div>
       ) : null}

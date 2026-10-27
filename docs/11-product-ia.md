@@ -106,12 +106,13 @@ flowchart LR
 
 | 项 | 现状 |
 | :--- | :--- |
-| 数据源 | **`frontend/src/features/timeline/mockMoments.ts`（假数据）**；字段与 `GrowthRecord` 同形，接真实 API 只需替换数据源 |
-| 图片 | 内联 SVG 占位（本地生成，不依赖外网） |
+| 数据源 | **真实动态**：`frontend/src/features/timeline/moments.ts` 拉取 `/api/workspaces/{id}/records/` 全部分页，映射为轨道项。按时间**正序**排列（第 1 张是最早的记录） |
+| 图片 | 每条记录取**首张视觉素材**（优先图片，其次视频封面）；无图记录渲染为文字卡片，不塞假占位图 |
 | 结构 | 开场遮罩 → 巨字标逐字上抬 → 横向轨道（左右可无限翻阅至两端）→ 单行读数 → 底部刻度尺 |
 | 滚动 | **纵向滚动** → **GSAP ScrollTrigger** 映射为横向位移，1px 纵向 = 1px 横向。wheel 由 `Rail.tsx` 接管（`preventDefault` + `scrollBy`）：这套布局下原生 wheel 滚动并不总是响应，接管可保证各浏览器一致且不会重复滚动；`→`/`←`、PageDown、End、滚动条均可用 |
 | 轨道 | [`Rail.tsx`](../frontend/src/features/timeline/Rail.tsx)：`position: fixed` 钉在视口，只写容器 `transform`；`←` `→`（或 `J` `K`）跳转，点击图片开大图 |
-| 卡片标记 | 编号在图上沿、标签在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
+| 卡片标记 | 编号在图上沿、标签（关系称呼 + 年月）在图下沿；**默认隐藏，hover 或成为当前张时滑出**（对应参考站的 `group-hover` + `translate-y`） |
+| 空 / 错误 | 无动态时开场页给「去发第一条」；取数失败显示错误文案，不白屏 |
 | 刻度尺 | [`Ruler.tsx`](../frontend/src/features/timeline/Ruler.tsx)：**canvas 逐帧绘制**（上千根 1px 竖线做成 DOM 会拖垮渲染），挂在 `gsap.ticker` 上与 ScrollTrigger 同帧；游标固定屏幕正中，标尺从它下面滑过；贴底 `bottom 6rem`（移动 8rem）；点按 / 拖动可跳转 |
 | 刻度语义 | 每月占「该月动态数 × 9」个槽位，每月第一槽为长刻度并带月份名 |
 | 单元测试面 | 见 [`scripts/devtools/README.md`](../frontend/scripts/devtools/README.md)：`measure.mjs` 可一键体检轨道几何与刻度尺 |

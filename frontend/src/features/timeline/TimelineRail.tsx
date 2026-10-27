@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Rail, type RailHandle } from './Rail'
 import { Ruler } from './Ruler'
 import { buildTicks } from './rulerTicks'
-import { ageLabel, type Moment } from './mockMoments'
+import { ageLabel, type TimelineMoment } from './moments'
 
 function formatDay(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
@@ -18,7 +18,7 @@ function formatDay(iso: string): string {
  * 参考站口径：每个月占 `图片数 × 9` 个槽，每月第一个槽是长刻度并带月份名。
  * 槽总数决定标尺稀密——槽越多，单槽越窄，刻度越密。
  */
-function useTicks(moments: Moment[]) {
+function useTicks(moments: TimelineMoment[]) {
   return useMemo(() => {
     // 分组键必须是完整 yyyy-MM，不能拿展示用的「4月」去比 ——
     // 早先写成 last.label === key，两边格式不同导致每条动态自成一月，
@@ -50,8 +50,8 @@ export function TimelineRail({
   moments,
   onOpen,
 }: {
-  moments: Moment[]
-  onOpen: (moment: Moment) => void
+  moments: TimelineMoment[]
+  onOpen: (moment: TimelineMoment) => void
 }) {
   const railRef = useRef<RailHandle | null>(null)
   /** 用户明确跳转的目标（键盘 / 刻度尺 / 索引）——只有它驱动滚动 */
@@ -69,15 +69,15 @@ export function TimelineRail({
     setProgress((prev) => (Math.abs(next - prev) < 0.0006 ? prev : next))
   }, [])
 
-  /** 点按 / 拖动刻度尺 → 吸附到最近的动态。 */
-  const handleScrub = useCallback(
-    (next: number) => {
-      if (!total) return
-      const i = Math.min(total - 1, Math.max(0, Math.round(next * (total - 1))))
-      setTargetIndex(i)
-    },
-    [total],
-  )
+  /**
+   * 点按 / 拖动刻度尺 → 直接把轨道拉到对应进度。
+   *
+   * 不换算成下标再转回来：刻度尺是进度的线性表示，
+   * 中间多一道 round() 会因卡片间距产生半张卡的偏差。
+   */
+  const handleScrub = useCallback((next: number) => {
+    railRef.current?.goToProgress(next)
+  }, [])
 
   return (
     <div className="tlr">
@@ -115,7 +115,9 @@ export function TimelineRail({
             <i>/{String(total).padStart(2, '0')}</i>
           </span>
           <span className="tlr-foot__date">
-            {formatDay(active.created_at)} · {ageLabel(active.dayIndex)}
+            {formatDay(active.created_at)}
+            {/* 年龄为空时不要留下孤零零的分隔点 */}
+            {ageLabel(active.dayIndex) ? ` · ${ageLabel(active.dayIndex)}` : ''}
           </span>
         </p>
       ) : null}

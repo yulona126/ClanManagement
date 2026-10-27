@@ -165,7 +165,7 @@ docker compose exec api python manage.py seed_demo
 - 只动这三个固定账号，不影响其它数据
 
 登录流程：`http://localhost:5180/` → 输入账号 → **选空间** → 进 Feed。
-`/timeline` 用假数据，不依赖后台数据，任何账号都能看。
+`/timeline` 读真实动态（`/api/workspaces/{id}/records/`），所以要先有数据和可用的后端。
 
 ### 本地前端连线上 API（只读调试线上数据）
 
