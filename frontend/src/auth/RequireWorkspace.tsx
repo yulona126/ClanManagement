@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { PageLoader } from '../components/PageLoader'
 import { useWorkspace } from '../features/workspaces/WorkspaceContext'
 
 /** Requires an explicitly selected workspace (set on /spaces). */
@@ -8,12 +9,7 @@ export function RequireWorkspace({ children }: { children: ReactNode }) {
   const location = useLocation()
 
   if (loading) {
-    return (
-      <main className="shell">
-        <p className="brand">Claner</p>
-        <p className="status status-loading">加载空间…</p>
-      </main>
-    )
+    return <PageLoader label="正在展开这个空间" />
   }
 
   if (!current) {

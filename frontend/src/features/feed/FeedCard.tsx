@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { GrowthRecord } from '../../api/records'
 import type { MediaAsset } from '../../api/media'
 import { AudioPlayer } from '../../components/AudioPlayer'
@@ -31,7 +31,11 @@ function VisualTile({
 
   return (
     <Link
-      to={`/records/${recordId}?media=${asset.id}`}
+      /*
+       * 不再带 ?media=：点图应该先进详情页，在详情里再点图才全屏。
+       * 之前直接带参数会让详情页一进来就弹大图，跳过了「看这条动态」本身。
+       */
+      to={`/records/${recordId}`}
       className={`feed-tile${isVideo ? ' feed-tile--video' : ''}`}
       onClick={(e) => e.stopPropagation()}
     >
@@ -74,6 +78,20 @@ export function FeedCard({
   const [expanded, setExpanded] = useState(false)
   /** 无评论时点「评论」就地展开输入框 */
   const [commentOpen, setCommentOpen] = useState(false)
+  const navigate = useNavigate()
+
+  /*
+   * 整张卡片都能点进详情（原来只有作者名和标题是链接）。
+   * 卡片里还有图片链接、评论输入框、音频条、按钮 —— 用 closest 一次性排除，
+   * 比在每个子元素上挂 stopPropagation 可靠。
+   * 选中文字时不跳转，避免用户想复制正文却被带走。
+   */
+  function onCardClick(e: React.MouseEvent<HTMLElement>) {
+    const target = e.target as HTMLElement
+    if (target.closest('a, button, input, textarea, audio, video')) return
+    if (window.getSelection()?.toString()) return
+    navigate(`/records/${record.id}`)
+  }
   const author = record.author_relation_label || `用户 #${record.author_id}`
   const visuals = record.media
     .filter((m) => m.media_type === 'image' || m.media_type === 'video')
@@ -91,7 +109,7 @@ export function FeedCard({
       .length - visuals.length
 
   return (
-    <article className="feed-card">
+    <article className="feed-card feed-card--clickable" onClick={onCardClick}>
       <AuthorAvatar
         label={author}
         avatarUrl={record.author_avatar_url}

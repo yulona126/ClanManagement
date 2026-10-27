@@ -8,6 +8,7 @@ import {
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { ManageFlash, ManagePageHeader } from './ManageChrome'
+import { InlineLoader } from '../../components/PageLoader'
 
 export function ManageHomePage() {
   const [users, setUsers] = useState(0)
@@ -77,7 +78,7 @@ export function ManageHomePage() {
         description="Claner 实例管理。先建用户与宝宝空间，再分配成员。"
       />
       <ManageFlash error={error} onCloseError={() => setError(null)} />
-      {loading ? <p className="meta">加载中…</p> : null}
+      {loading ? <InlineLoader label="加载概览" /> : null}
       <div className="manage-stat-grid">
         {cards.map((c) => (
           <Link key={c.label} to={c.to} className="manage-stat-card">

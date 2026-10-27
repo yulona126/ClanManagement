@@ -1,12 +1,13 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
 import type { ReactNode } from 'react'
+import { PageLoader } from '../components/PageLoader'
+import { useAuth } from '../auth/AuthContext'
 
 export function RequireStaff({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <p className="status status-loading">加载中…</p>
+    return <PageLoader label="正在进入管理台" />
   }
 
   if (!user?.is_staff) {

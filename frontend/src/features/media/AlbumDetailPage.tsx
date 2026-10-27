@@ -18,6 +18,7 @@ import { friendlyError } from '../../components/friendlyError'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
 import { PhotoWall } from './PhotoWall'
 import { uploadFilesToAlbum } from './upload'
+import { InlineLoader } from '../../components/PageLoader'
 
 export function AlbumDetailPage() {
   const { albumId } = useParams()
@@ -181,7 +182,7 @@ export function AlbumDetailPage() {
     return <Navigate to="/album" replace />
   }
 
-  if (wsLoading || loading) return <p className="meta">加载中…</p>
+  if (wsLoading || loading) return <InlineLoader label="加载相册" />
 
   if (error || !album) {
     return (

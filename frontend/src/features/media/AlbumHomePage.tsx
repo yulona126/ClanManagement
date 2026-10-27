@@ -12,6 +12,7 @@ import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { resolveMediaUrl } from './mediaUrl'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
+import { InlineLoader } from '../../components/PageLoader'
 
 export function AlbumHomePage() {
   const { message } = App.useApp()
@@ -89,7 +90,7 @@ export function AlbumHomePage() {
     }
   }
 
-  if (wsLoading || loading) return <p className="meta">加载中…</p>
+  if (wsLoading || loading) return <InlineLoader label="加载相册" />
 
   return (
     <>
