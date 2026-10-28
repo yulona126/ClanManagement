@@ -1,5 +1,5 @@
 import { App } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -134,6 +134,27 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
       })
     }
     setPending((prev) => [...prev, ...next].slice(0, MAX_MEDIA))
+  }
+
+  /*
+   * 拖动调整顺序。
+   *
+   * 上传是并发的，若顺序只由"谁先传完"决定，发布后就会跟选图顺序不一致 ——
+   * 这里让用户在发布前直接拖动缩略图排版，顺序会作为 sort_order 一起提交。
+   */
+  const dragUidRef = useRef<string | null>(null)
+
+  function movePending(fromUid: string, toUid: string) {
+    if (fromUid === toUid) return
+    setPending((prev) => {
+      const from = prev.findIndex((p) => p.uid === fromUid)
+      const to = prev.findIndex((p) => p.uid === toUid)
+      if (from < 0 || to < 0) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
   }
 
   function removePending(uid: string) {
@@ -337,14 +358,48 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
       />
 
       {pending.length > 0 || canAddMore ? (
+        <>
+          {pending.length > 1 ? (
+            <p className="compose-previews-hint meta">
+              拖动可调整顺序 · 发布后按此顺序展示，第一张作为封面
+            </p>
+          ) : null}
         <ul className="compose-previews" aria-label="已选媒体">
           {pending.map((item) => {
             const st = itemStatus[item.uid] ?? 'idle'
+            // 上传过程中不允许再拖，避免顺序与已提交的 sort_order 不一致
+            const draggable = !busy && st === 'idle'
             return (
               <li
                 key={item.uid}
-                className={`compose-preview-item${st !== 'idle' ? ` is-${st}` : ''}`}
+                className={`compose-preview-item${st !== 'idle' ? ` is-${st}` : ''}${
+                  draggable ? ' is-draggable' : ''
+                }`}
+                draggable={draggable}
+                onDragStart={(e) => {
+                  dragUidRef.current = item.uid
+                  e.dataTransfer.effectAllowed = 'move'
+                  // Firefox 需要 setData 才会真的开始拖
+                  e.dataTransfer.setData('text/plain', item.uid)
+                }}
+                onDragOver={(e) => {
+                  if (!dragUidRef.current) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const from = dragUidRef.current
+                  dragUidRef.current = null
+                  if (from) movePending(from, item.uid)
+                }}
+                onDragEnd={() => {
+                  dragUidRef.current = null
+                }}
               >
+                <span className="compose-preview-order" aria-hidden>
+                  {pending.indexOf(item) + 1}
+                </span>
                 {item.previewUrl ? (
                   <img src={item.previewUrl} alt="" />
                 ) : (
@@ -400,6 +455,7 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
             </li>
           ) : null}
         </ul>
+        </>
       ) : null}
     </div>
   )

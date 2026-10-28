@@ -939,6 +939,7 @@ class MediaCompleteView(APIView):
             media_type=media_type,
             thumbnail_url=thumb,
             for_comment=bool(data.get("for_comment")),
+            sort_order=int(data.get("sort_order") or 0),
             **exif_fields,
         )
         if album is not None:

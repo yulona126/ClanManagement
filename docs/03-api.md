@@ -540,3 +540,14 @@ owner / editor 可上传任意类型；**普通成员仅可上传 `media_type=au
 ## 3.5 OpenAPI
 
 阶段 1 起可用 `drf-spectacular` 自动生成 `/api/schema/`；本文件为人工摘要，冲突时以**已实现且测试通过的行为** + 同步回本文档为准。
+
+## 媒体顺序：`sort_order`
+
+`POST /api/workspaces/{id}/media/complete/` 新增可选字段 `sort_order`（整数 ≥ 0）：
+
+```json
+{ "object_key": "...", "media_type": "image", "record_id": 12, "sort_order": 2 }
+```
+
+上传是并发的，服务端无法从 `id` 推断用户选图顺序；客户端需按选图/拖动后的下标传入。
+记录的 `media` 数组按 `sort_order, id` 返回。

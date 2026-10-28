@@ -3008,6 +3008,34 @@ a.btn-ghost:hover {
   max-width: 20rem;
 }
 
+.compose-preview-item.is-draggable {
+  cursor: grab;
+}
+
+.compose-preview-item.is-draggable:active {
+  cursor: grabbing;
+}
+
+/* 序号角标：让"第几张"一目了然，也方便验证发布后的顺序 */
+.compose-preview-order {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  z-index: 2;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.1rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .compose-preview-item {
   position: relative;
   aspect-ratio: 1;

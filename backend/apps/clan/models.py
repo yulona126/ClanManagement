@@ -192,6 +192,12 @@ class MediaAsset(models.Model):
     exif_json = models.JSONField(default=dict, blank=True)
     # Voice comments reuse MediaAsset storage but must not appear in post media.
     for_comment = models.BooleanField(default=False)
+    """
+    在所属记录里的展示顺序。
+    上传是**并发**的，MediaAsset 的 id 顺序等于"谁先传完"，不等于用户选图的顺序；
+    所以顺序必须由客户端显式指定，不能靠 id。
+    """
+    sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -201,7 +207,8 @@ class MediaAsset(models.Model):
             models.Index(fields=["workspace", "taken_at"]),
             models.Index(fields=["record", "for_comment"]),
         ]
-        ordering = ["id"]
+        # 先按用户排的顺序，再按 id 兜底（历史数据 sort_order 都是 0）
+        ordering = ["sort_order", "id"]
 
     def __str__(self) -> str:
         return f"{self.media_type}:{self.object_key}"

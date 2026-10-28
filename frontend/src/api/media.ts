@@ -96,6 +96,8 @@ export async function completeMedia(
     thumbnail_object_key?: string
     /** Voice comment asset — excluded from post media / gallery. */
     for_comment?: boolean
+    /** 用户选图/拖动后的顺序（并发上传时 id 不可靠）。 */
+    sort_order?: number
   },
 ): Promise<MediaAsset> {
   const { data } = await api.post<MediaAsset>(

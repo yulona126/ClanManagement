@@ -20,6 +20,8 @@ export type UploadTarget = {
   recordId?: number
   albumId?: number
   forComment?: boolean
+  /** 在所属记录里的展示顺序（用户选图/拖动后的顺序） */
+  sortOrder?: number
 }
 
 const UPLOAD_CONCURRENCY = 3
@@ -113,6 +115,7 @@ async function uploadBatch(
   files: File[],
   uploadOne: (
     file: File,
+    index: number,
     onPhase?: (phase: 'compress' | 'upload', uploadBytes?: number) => void,
   ) => Promise<MediaAsset>,
   onProgress?: (p: UploadBatchProgress) => void,
@@ -122,7 +125,7 @@ async function uploadBatch(
   let completed = 0
   return mapPool(prepared, UPLOAD_CONCURRENCY, async (file, index) => {
     onProgress?.({ completed, total, index, phase: 'compress' })
-    const asset = await uploadOne(file, (phase, uploadBytes) => {
+    const asset = await uploadOne(file, index, (phase, uploadBytes) => {
       onProgress?.({
         completed,
         total,
@@ -210,6 +213,7 @@ export async function uploadFileToWorkspace(
     exif,
     thumbnail_object_key,
     for_comment: target.forComment || undefined,
+    sort_order: target.sortOrder,
   })
 }
 
@@ -217,7 +221,7 @@ export async function uploadFileToRecord(
   workspaceId: number,
   recordId: number,
   file: File,
-  options: { forComment?: boolean } = {},
+  options: { forComment?: boolean; sortOrder?: number } = {},
   onPhase?: (phase: 'compress' | 'upload', uploadBytes?: number) => void,
 ): Promise<MediaAsset> {
   return uploadFileToWorkspace(
@@ -226,6 +230,7 @@ export async function uploadFileToRecord(
     {
       recordId,
       forComment: options.forComment,
+      sortOrder: options.sortOrder,
     },
     onPhase,
   )
@@ -239,8 +244,8 @@ export async function uploadFilesToRecord(
 ): Promise<MediaAsset[]> {
   return uploadBatch(
     files,
-    (file, onPhase) =>
-      uploadFileToRecord(workspaceId, recordId, file, {}, onPhase),
+    (file, index, onPhase) =>
+      uploadFileToRecord(workspaceId, recordId, file, { sortOrder: index }, onPhase),
     onProgress,
   )
 }
@@ -253,8 +258,8 @@ export async function uploadFilesToAlbum(
 ): Promise<MediaAsset[]> {
   return uploadBatch(
     files,
-    (file, onPhase) =>
-      uploadFileToWorkspace(workspaceId, file, { albumId }, onPhase),
+    (file, index, onPhase) =>
+      uploadFileToWorkspace(workspaceId, file, { albumId, sortOrder: index }, onPhase),
     onProgress,
   )
 }
@@ -266,7 +271,8 @@ export async function uploadFilesToLibrary(
 ): Promise<MediaAsset[]> {
   return uploadBatch(
     files,
-    (file, onPhase) => uploadFileToWorkspace(workspaceId, file, {}, onPhase),
+    (file, index, onPhase) =>
+      uploadFileToWorkspace(workspaceId, file, { sortOrder: index }, onPhase),
     onProgress,
   )
 }
