@@ -2530,6 +2530,9 @@ a.btn-ghost:hover {
 .reorder-item {
   position: relative;
   aspect-ratio: 1;
+  transition:
+    transform 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out);
   /* 拖动排序时不要被浏览器当成滚动 */
   touch-action: none;
   -webkit-user-select: none;
@@ -2554,9 +2557,13 @@ a.btn-ghost:hover {
 }
 
 .reorder-item.is-dragging {
-  opacity: 0.45;
+  opacity: 0.9;
   outline: 2px solid var(--color-ink);
   outline-offset: 1px;
+  /* 被拖的那张浮起来，其余项在下面让位 */
+  transform: scale(1.04);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+  z-index: 2;
 }
 
 .reorder-item__no {
@@ -3131,9 +3138,12 @@ a.btn-ghost:hover {
 }
 
 .compose-preview-item.is-dragging {
-  opacity: 0.45;
+  opacity: 0.9;
   outline: 2px solid var(--color-ink);
   outline-offset: 1px;
+  transform: scale(1.04);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+  z-index: 2;
 }
 
 /* 序号角标：让"第几张"一目了然，也方便验证发布后的顺序 */
