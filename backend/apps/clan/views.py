@@ -736,6 +736,15 @@ class RecordMediaReorderView(APIView):
 
     def post(self, request, workspace_id: int, rid: int):
         record = _get_record_in_workspace(workspace_id, rid)
+        # 与 CanModifyGrowthRecord 保持一致：owner 可改任意，editor 只能改自己的。
+        # 只按角色放行会让任意编辑改动别人的照片顺序。
+        membership = request.membership  # type: ignore[attr-defined]
+        if (
+            membership.role != Membership.Role.OWNER
+            and record.author_id != request.user.id
+        ):
+            raise PermissionDenied("只能调整自己发布的动态。")
+
         ids = request.data.get("ids")
         if not isinstance(ids, list) or not ids:
             raise ValidationError({"ids": "请提供按顺序排列的媒体 id 数组。"})
@@ -863,6 +872,13 @@ class MediaCompleteView(APIView):
         record = (
             _get_record_in_workspace(workspace_id, record_id) if record_id else None
         )
+        if record is not None:
+            membership = request.membership  # type: ignore[attr-defined]
+            if (
+                membership.role != Membership.Role.OWNER
+                and record.author_id != request.user.id
+            ):
+                raise PermissionDenied("只能往自己发布的动态里添加媒体。")
         album = _get_album_in_workspace(workspace_id, album_id) if album_id else None
 
         prefix = expected_key_prefix(workspace_id)

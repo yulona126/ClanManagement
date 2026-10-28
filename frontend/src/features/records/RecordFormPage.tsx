@@ -1,5 +1,5 @@
 import { App } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -12,6 +12,7 @@ import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
 import { invalidateFeedCache } from '../feed/feedCache'
 import { uploadFilesToRecord } from '../media/upload'
+import { usePointerReorder } from '../common/usePointerReorder'
 import { extractVideoPoster } from '../media/extractVideoPoster'
 import {
   filterLivePhotoCompanions,
@@ -142,8 +143,6 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
    * 上传是并发的，若顺序只由"谁先传完"决定，发布后就会跟选图顺序不一致 ——
    * 这里让用户在发布前直接拖动缩略图排版，顺序会作为 sort_order 一起提交。
    */
-  const dragUidRef = useRef<string | null>(null)
-
   function movePending(fromUid: string, toUid: string) {
     if (fromUid === toUid) return
     setPending((prev) => {
@@ -156,6 +155,9 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
       return next
     })
   }
+
+  // 指针拖拽：触屏和鼠标都能用（HTML5 drag 在 iOS 上不触发）
+  const { handlers: reorderHandlers } = usePointerReorder(movePending)
 
   function removePending(uid: string) {
     setPending((prev) => {
@@ -375,27 +377,7 @@ export function RecordFormPage({ mode }: { mode: Mode }) {
                 className={`compose-preview-item${st !== 'idle' ? ` is-${st}` : ''}${
                   draggable ? ' is-draggable' : ''
                 }`}
-                draggable={draggable}
-                onDragStart={(e) => {
-                  dragUidRef.current = item.uid
-                  e.dataTransfer.effectAllowed = 'move'
-                  // Firefox 需要 setData 才会真的开始拖
-                  e.dataTransfer.setData('text/plain', item.uid)
-                }}
-                onDragOver={(e) => {
-                  if (!dragUidRef.current) return
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const from = dragUidRef.current
-                  dragUidRef.current = null
-                  if (from) movePending(from, item.uid)
-                }}
-                onDragEnd={() => {
-                  dragUidRef.current = null
-                }}
+                {...(draggable ? reorderHandlers(item.uid) : {})}
               >
                 <span className="compose-preview-order" aria-hidden>
                   {pending.indexOf(item) + 1}

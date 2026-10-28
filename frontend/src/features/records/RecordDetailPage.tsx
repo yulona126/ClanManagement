@@ -26,6 +26,33 @@ import { uploadAudioBlobToRecord, uploadFilesToRecord } from '../media/upload'
 import { AuthorAvatar } from '../feed/AuthorAvatar'
 import { formatRelativeTime } from '../feed/time'
 import { useWorkspace } from '../workspaces/WorkspaceContext'
+import { usePointerReorder } from '../common/usePointerReorder'
+
+const MENU_ICONS = {
+  edit: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+      <path d="M13.5 6.5 17.5 10.5" />
+    </svg>
+  ),
+  add: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M12 9v6M9 12h6" />
+    </svg>
+  ),
+  order: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7h9M4 12h13M4 17h7" />
+      <path d="M18 14l3 3-3 3" />
+    </svg>
+  ),
+  trash: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7h16M10 4h4M9 7v12M15 7v12M6 7l1 13h10l1-13" />
+    </svg>
+  ),
+}
 
 type DetailLocationState = {
   uploadError?: string
@@ -54,7 +81,6 @@ export function RecordDetailPage() {
   const [reorderOpen, setReorderOpen] = useState(false)
   const [orderDraft, setOrderDraft] = useState<number[]>([])
   const [savingOrder, setSavingOrder] = useState(false)
-  const dragIdRef = useRef<number | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -113,6 +139,23 @@ export function RecordDetailPage() {
       (current.my_role === 'editor' && record.author_id === user?.id))
 
   const canComment = Boolean(current)
+
+  /** 把 id 从当前位置挪到目标位置（排序弹窗与手机拖拽共用） */
+  function moveOrder(fromId: number, toId: number) {
+    setOrderDraft((prev) => {
+      const fromIdx = prev.indexOf(fromId)
+      const toIdx = prev.indexOf(toId)
+      if (fromIdx < 0 || toIdx < 0) return prev
+      const next = [...prev]
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, fromId)
+      return next
+    })
+  }
+
+  const { handlers: reorderHandlers } = usePointerReorder((from, to) =>
+    moveOrder(Number(from), Number(to)),
+  )
 
   async function saveOrder() {
     if (!current || !record) return
@@ -252,24 +295,29 @@ export function RecordDetailPage() {
               <div className="post-menu-panel" role="menu">
                 <Link
                   role="menuitem"
+                  className="post-menu-item"
                   to={`/records/${record.id}/edit`}
                   onClick={() => setMenuOpen(false)}
                 >
+                  <span className="post-menu-icon">{MENU_ICONS.edit}</span>
                   编辑文字
                 </Link>
                 <button
                   type="button"
                   role="menuitem"
+                  className="post-menu-item"
                   onClick={() => {
                     setMenuOpen(false)
                     setShowAddMedia(true)
                   }}
                 >
+                  <span className="post-menu-icon">{MENU_ICONS.add}</span>
                   添加照片/视频
                 </button>
                 <button
                   type="button"
                   role="menuitem"
+                  className="post-menu-item"
                   onClick={() => {
                     setMenuOpen(false)
                     setOrderDraft(
@@ -280,15 +328,17 @@ export function RecordDetailPage() {
                     setReorderOpen(true)
                   }}
                 >
+                  <span className="post-menu-icon">{MENU_ICONS.order}</span>
                   调整照片顺序
                 </button>
                 <button
                   type="button"
                   role="menuitem"
-                  className="danger"
+                  className="post-menu-item danger"
                   disabled={deleting || uploading}
                   onClick={() => void onDelete()}
                 >
+                  <span className="post-menu-icon">{MENU_ICONS.trash}</span>
                   {deleting ? '删除中…' : '删除'}
                 </button>
               </div>
@@ -349,32 +399,7 @@ export function RecordDetailPage() {
               <li
                 key={mid}
                 className="reorder-item"
-                draggable
-                onDragStart={() => {
-                  dragIdRef.current = mid
-                }}
-                onDragOver={(e) => {
-                  if (dragIdRef.current == null) return
-                  e.preventDefault()
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const from = dragIdRef.current
-                  dragIdRef.current = null
-                  if (from == null || from === mid) return
-                  setOrderDraft((prev) => {
-                    const next = [...prev]
-                    const fromIdx = next.indexOf(from)
-                    const toIdx = next.indexOf(mid)
-                    if (fromIdx < 0 || toIdx < 0) return prev
-                    next.splice(fromIdx, 1)
-                    next.splice(toIdx, 0, from)
-                    return next
-                  })
-                }}
-                onDragEnd={() => {
-                  dragIdRef.current = null
-                }}
+                {...reorderHandlers(String(mid))}
               >
                 <img
                   src={

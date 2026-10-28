@@ -2530,6 +2530,11 @@ a.btn-ghost:hover {
 .reorder-item {
   position: relative;
   aspect-ratio: 1;
+  /* 拖动排序时不要被浏览器当成滚动 */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: var(--color-bg-deep);
@@ -2546,6 +2551,12 @@ a.btn-ghost:hover {
   object-fit: cover;
   display: block;
   pointer-events: none;
+}
+
+.reorder-item.is-dragging {
+  opacity: 0.45;
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
 }
 
 .reorder-item__no {
@@ -2779,40 +2790,90 @@ a.btn-ghost:hover {
 .post-menu-panel {
   position: absolute;
   right: 0;
-  top: calc(100% + 0.25rem);
-  min-width: 8rem;
-  display: grid;
-  padding: 0.35rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-panel);
+  top: calc(100% + 0.35rem);
   z-index: 20;
+  display: grid;
+  gap: 0.1rem;
+  width: max-content;
+  /* 手机上不要顶出屏幕；允许换行，长文案不会被裁掉 */
+  min-width: 9.5rem;
+  max-width: min(15rem, calc(100vw - 2rem));
+  padding: 0.35rem;
+  background: var(--color-panel-solid);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 18px 40px -24px rgba(0, 0, 0, 0.45);
 }
 
-.post-menu-panel a,
-.post-menu-panel button {
-  display: block;
+/*
+ * Link 和 button 都要有同样的版式：
+ * 之前只写了 button，菜单第一项（<Link>「编辑文字」）没有内边距与悬停态，
+ * 看起来像漏了一行。
+ */
+.post-menu-panel .post-menu-item,
+.post-menu-panel > a,
+.post-menu-panel > button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
-  text-align: left;
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.6rem;
   border: 0;
+  border-radius: 0.5rem;
   background: transparent;
   color: var(--color-ink);
   font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  text-align: left;
   text-decoration: none;
-  border-radius: var(--radius-sm);
+  /* 关键：允许换行，中文长条目不再被压成一行溢出 */
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
-.post-menu-panel a:hover,
-.post-menu-panel button:hover {
-  background: var(--color-accent-soft);
+.post-menu-panel .post-menu-item:hover,
+.post-menu-panel > a:hover,
+.post-menu-panel > button:hover {
+  background: var(--color-bg-deep);
+  text-decoration: none;
+  color: var(--color-ink);
 }
 
-.post-menu-panel .danger {
+.post-menu-panel .post-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: transparent;
+}
+
+.post-menu-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-muted);
+}
+
+.post-menu-panel .post-menu-item:hover .post-menu-icon {
+  color: var(--color-ink);
+}
+
+/* 删除项与上面几项拉开距离，并用危险色 */
+.post-menu-panel .post-menu-item.danger {
+  margin-top: 0.2rem;
   color: var(--color-danger, #b42318);
 }
+
+.post-menu-panel .post-menu-item.danger:hover {
+  background: var(--color-err-soft, rgba(180, 35, 24, 0.08));
+  color: var(--color-danger, #b42318);
+}
+
+.post-menu-panel .post-menu-item.danger .post-menu-icon {
+  color: currentColor;
+}
+
+
 
 .post-header {
   display: grid;
@@ -3059,10 +3120,20 @@ a.btn-ghost:hover {
 
 .compose-preview-item.is-draggable {
   cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .compose-preview-item.is-draggable:active {
   cursor: grabbing;
+}
+
+.compose-preview-item.is-dragging {
+  opacity: 0.45;
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
 }
 
 /* 序号角标：让"第几张"一目了然，也方便验证发布后的顺序 */
