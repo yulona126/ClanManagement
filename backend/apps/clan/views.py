@@ -724,6 +724,49 @@ def _media_user(request) -> str:
     return "user=anonymous"
 
 
+class RecordMediaReorderView(APIView):
+    """
+    调整一条记录里媒体的展示顺序（已发布也能改）。
+
+    前端传**按目标顺序排列的媒体 id 数组**；这里把 sort_order 写成数组下标。
+    只接受该记录自己的媒体，避免越权改别人空间。
+    """
+
+    permission_classes = [IsAuthenticated, IsWorkspaceEditor]
+
+    def post(self, request, workspace_id: int, rid: int):
+        record = _get_record_in_workspace(workspace_id, rid)
+        ids = request.data.get("ids")
+        if not isinstance(ids, list) or not ids:
+            raise ValidationError({"ids": "请提供按顺序排列的媒体 id 数组。"})
+
+        try:
+            wanted = [int(x) for x in ids]
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"ids": "媒体 id 必须是整数。"}) from exc
+
+        assets = {
+            m.id: m
+            for m in MediaAsset.objects.filter(record=record, id__in=wanted)
+        }
+        if len(assets) != len(set(wanted)):
+            raise ValidationError({"ids": "有媒体不属于这条动态。"})
+
+        for order, mid in enumerate(wanted):
+            asset = assets[mid]
+            if asset.sort_order != order:
+                asset.sort_order = order
+                asset.save(update_fields=["sort_order"])
+
+        media_log.info(
+            "record media reorder ws=%s record=%s count=%s",
+            workspace_id,
+            rid,
+            len(wanted),
+        )
+        return Response({"ids": wanted})
+
+
 class MediaPresignView(APIView):
     permission_classes = [IsAuthenticated, CanUploadWorkspaceMedia]
 
@@ -939,6 +982,7 @@ class MediaCompleteView(APIView):
             media_type=media_type,
             thumbnail_url=thumb,
             for_comment=bool(data.get("for_comment")),
+            sort_order=int(data.get("sort_order") or 0),
             **exif_fields,
         )
         if album is not None:

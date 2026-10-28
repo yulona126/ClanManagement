@@ -15,6 +15,7 @@ from .views import (
     MediaLibraryListView,
     MediaLocalPutView,
     MediaPresignView,
+    RecordMediaReorderView,
     MembershipDetailView,
     MembershipInviteView,
     MembershipListView,
@@ -87,6 +88,11 @@ urlpatterns = [
         "workspaces/<int:workspace_id>/records/<int:rid>/",
         GrowthRecordDetailView.as_view(),
         name="workspace-record-detail",
+    ),
+    path(
+        "workspaces/<int:workspace_id>/records/<int:rid>/media/reorder/",
+        RecordMediaReorderView.as_view(),
+        name="workspace-record-media-reorder",
     ),
     path(
         "workspaces/<int:workspace_id>/media/presign/",

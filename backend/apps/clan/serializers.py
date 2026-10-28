@@ -407,6 +407,8 @@ class MediaCompleteSerializer(serializers.Serializer):
         default="",
     )
     for_comment = serializers.BooleanField(required=False, default=False)
+    # 用户选图/拖动后的顺序；并发上传时 id 不可靠，必须显式传
+    sort_order = serializers.IntegerField(required=False, min_value=0, default=0)
 
     def validate(self, attrs):
         media_type = attrs["media_type"]

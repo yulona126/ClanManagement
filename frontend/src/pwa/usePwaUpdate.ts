@@ -15,6 +15,34 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 
 const CHECK_INTERVAL_MS = 20 * 60 * 1000
 
+/**
+ * 应用更新后的冷却期。
+ *
+ * 为什么需要：CDN（例如 Cloudflare）可能在不同边缘节点缓存到不同版本的 sw.js，
+ * 浏览器于是反复"发现新版本 → 应用 → 又发现"。
+
+ * 冷却期内不再提示、也不再自动应用，避免一直弹更新。
+ */
+const APPLY_COOLDOWN_MS = 10 * 60 * 1000
+const APPLIED_AT_KEY = 'claner:pwa-applied-at'
+
+function markApplied(): void {
+  try {
+    window.localStorage.setItem(APPLIED_AT_KEY, String(Date.now()))
+  } catch {
+    /* 隐私模式忽略 */
+  }
+}
+
+function isCoolingDown(): boolean {
+  try {
+    const at = Number(window.localStorage.getItem(APPLIED_AT_KEY) || 0)
+    return at > 0 && Date.now() - at < APPLY_COOLDOWN_MS
+  } catch {
+    return false
+  }
+}
+
 export type PwaUpdate = {
   needRefresh: boolean
   offlineReady: boolean
@@ -42,6 +70,7 @@ export function usePwaUpdate(): PwaUpdate {
   } = useRegisterSW()
 
   const [dismissed, setDismissed] = useState(false)
+  const [coolingDown, setCoolingDown] = useState(() => isCoolingDown())
 
   useEffect(() => {
     const runCheck = () => {
@@ -68,15 +97,27 @@ export function usePwaUpdate(): PwaUpdate {
    * 下次回到前台就是新版本 —— 不用等人点提示。
    */
   useEffect(() => {
-    if (!needRefresh) return
+    if (!needRefresh || coolingDown) return
     const onHidden = () => {
-      if (document.visibilityState === 'hidden') void updateServiceWorker(true)
+      if (document.visibilityState === 'hidden') {
+        markApplied()
+        void updateServiceWorker(true)
+      }
     }
     document.addEventListener('visibilitychange', onHidden)
     return () => document.removeEventListener('visibilitychange', onHidden)
-  }, [needRefresh, updateServiceWorker])
+  }, [needRefresh, coolingDown, updateServiceWorker])
+
+  /* 冷却结束（10 分钟后）再允许提示一次，不必刷新页面 */
+  useEffect(() => {
+    if (!coolingDown) return
+    const timer = window.setTimeout(() => setCoolingDown(false), APPLY_COOLDOWN_MS)
+    return () => window.clearTimeout(timer)
+  }, [coolingDown])
 
   const apply = useCallback(() => {
+    markApplied()
+    setCoolingDown(true)
     void updateServiceWorker(true)
   }, [updateServiceWorker])
 
@@ -86,7 +127,8 @@ export function usePwaUpdate(): PwaUpdate {
   }, [setNeedRefresh])
 
   return {
-    needRefresh: needRefresh && !dismissed,
+    // 冷却期内静默：宁可晚 10 分钟提示，也不要一直弹
+    needRefresh: needRefresh && !dismissed && !coolingDown,
     offlineReady,
     apply,
     dismiss,

@@ -84,6 +84,16 @@ docker compose up -d db
 | `src/pwa/usePwaUpdate.ts` | 打开/恢复前台、窗口聚焦、每 20 分钟主动 `registration.update()`；用户切到后台时自动应用更新 |
 | `src/pwa/PwaUpdateToast.tsx` | 右下角提示「有新版本 · 立即更新 / 稍后」 |
 
+**部署后必须确认容器里就是新 SW**（旧 sw.js 会引用已经不存在的 `workbox-*.js`，
+安装失败 → 浏览器反复"发现新版本"、一直弹提示）：
+
+```bash
+docker compose ps            # 确认只有一个 web 容器在跑
+docker compose exec web sh -c \
+  'ls -l /usr/share/nginx/html/sw.js; grep -c SKIP_WAITING /usr/share/nginx/html/sw.js'
+# 期望 SKIP_WAITING 为 1（prompt 模式）；若是 0，说明镜像没重建或旧容器还在服务
+```
+
 **部署后必须验证响应头**（少一条，更新就可能永远送不到）：
 
 ```bash

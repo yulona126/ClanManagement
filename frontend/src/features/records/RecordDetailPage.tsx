@@ -1,4 +1,4 @@
-import { App } from 'antd'
+import { App, Modal } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import {
   Link,
@@ -7,7 +7,12 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router-dom'
-import { deleteRecord, fetchRecord, type GrowthRecord } from '../../api/records'
+import {
+  deleteRecord,
+  fetchRecord,
+  reorderRecordMedia,
+  type GrowthRecord,
+} from '../../api/records'
 import { useAuth } from '../../auth/AuthContext'
 import { Button } from '../../components/ui'
 import { friendlyError } from '../../components/friendlyError'
@@ -45,6 +50,11 @@ export function RecordDetailPage() {
   const [uploading, setUploading] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAddMedia, setShowAddMedia] = useState(false)
+  /** 调整媒体顺序（已发布的也能改） */
+  const [reorderOpen, setReorderOpen] = useState(false)
+  const [orderDraft, setOrderDraft] = useState<number[]>([])
+  const [savingOrder, setSavingOrder] = useState(false)
+  const dragIdRef = useRef<number | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -103,6 +113,27 @@ export function RecordDetailPage() {
       (current.my_role === 'editor' && record.author_id === user?.id))
 
   const canComment = Boolean(current)
+
+  async function saveOrder() {
+    if (!current || !record) return
+    setSavingOrder(true)
+    try {
+      await reorderRecordMedia(current.id, record.id, orderDraft)
+      // 本地重排，避免整页刷新；其余媒体（语音）保持原样接在后面
+      const map = new Map(record.media.map((m) => [m.id, m]))
+      const ordered = orderDraft
+        .map((mid) => map.get(mid))
+        .filter((m): m is NonNullable<typeof m> => Boolean(m))
+      const rest = record.media.filter((m) => !orderDraft.includes(m.id))
+      setRecord({ ...record, media: [...ordered, ...rest] })
+      invalidateFeedCache(current.id)
+      setReorderOpen(false)
+    } catch (err) {
+      setError(friendlyError(err, '保存顺序失败'))
+    } finally {
+      setSavingOrder(false)
+    }
+  }
 
   function onDelete() {
     if (!current || !record) return
@@ -239,6 +270,21 @@ export function RecordDetailPage() {
                 <button
                   type="button"
                   role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setOrderDraft(
+                      record.media
+                        .filter((m) => m.media_type !== 'audio')
+                        .map((m) => m.id),
+                    )
+                    setReorderOpen(true)
+                  }}
+                >
+                  调整照片顺序
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   className="danger"
                   disabled={deleting || uploading}
                   onClick={() => void onDelete()}
@@ -277,6 +323,74 @@ export function RecordDetailPage() {
           ))}
         </div>
       ) : null}
+
+      {/*
+        调整顺序：拖动缩略图即可重排，第一张作为封面。
+        已发布的动态也能改（走 records/{id}/media/reorder/）。
+      */}
+      <Modal
+        open={reorderOpen}
+        title="调整照片顺序"
+        okText="保存顺序"
+        cancelText="取消"
+        confirmLoading={savingOrder}
+        onCancel={() => setReorderOpen(false)}
+        onOk={() => void saveOrder()}
+        width={520}
+      >
+        <p className="meta" style={{ marginTop: 0 }}>
+          拖动缩略图调整顺序，第一张作为封面。
+        </p>
+        <ul className="reorder-grid">
+          {orderDraft.map((mid, index) => {
+            const asset = record.media.find((m) => m.id === mid)
+            if (!asset) return null
+            return (
+              <li
+                key={mid}
+                className="reorder-item"
+                draggable
+                onDragStart={() => {
+                  dragIdRef.current = mid
+                }}
+                onDragOver={(e) => {
+                  if (dragIdRef.current == null) return
+                  e.preventDefault()
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const from = dragIdRef.current
+                  dragIdRef.current = null
+                  if (from == null || from === mid) return
+                  setOrderDraft((prev) => {
+                    const next = [...prev]
+                    const fromIdx = next.indexOf(from)
+                    const toIdx = next.indexOf(mid)
+                    if (fromIdx < 0 || toIdx < 0) return prev
+                    next.splice(fromIdx, 1)
+                    next.splice(toIdx, 0, from)
+                    return next
+                  })
+                }}
+                onDragEnd={() => {
+                  dragIdRef.current = null
+                }}
+              >
+                <img
+                  src={
+                    asset.thumbnail_url
+                      ? asset.thumbnail_url
+                      : asset.file_url
+                  }
+                  alt=""
+                  draggable={false}
+                />
+                <span className="reorder-item__no">{index + 1}</span>
+              </li>
+            )
+          })}
+        </ul>
+      </Modal>
 
       {images.length > 0 ? (
         <MediaGallery

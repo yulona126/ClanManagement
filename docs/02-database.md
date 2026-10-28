@@ -278,3 +278,14 @@ GrowthRecord.objects.filter(workspace_id=workspace_id)
 ```
 
 禁止：仅按 `id` 取记录而不校验所属 Workspace。
+
+## 媒体展示顺序（`MediaAsset.sort_order`）
+
+`MediaAsset` 增加 `sort_order`，`ordering = ["sort_order", "id"]`。
+
+原因：上传是**并发**的（`mapPool`，并发 3），`MediaAsset.id` 的顺序等于"谁先传完"，
+不等于用户选图的顺序 —— 发布后照片顺序会变。现在：
+
+- 客户端在 `complete` 时带 `sort_order`（选图/拖动后的下标）
+- 列表、详情按 `sort_order` 排序，历史数据 `sort_order = 0` 时回退到 `id`，行为不变
+- 排序迁移：`clan/0009_alter_mediaasset_options_mediaasset_sort_order`

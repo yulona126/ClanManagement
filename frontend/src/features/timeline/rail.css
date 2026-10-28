@@ -33,7 +33,17 @@
 .tlr-viewport {
   position: fixed;
   inset: 0;
+  /*
+   * 注意必须用 `clip` 而不是 `hidden`。
+   *
+   * `overflow: hidden` 会让这一层变成**滚动容器**：iOS 上在它上面做纵向滑动时，
+   * 系统会尝试滚动这一层（它没有可滚内容），并且**不会把手势链给文档** ——
+   * 表现就是「整个页面滑不动，只有拖时间轴才行」。
+   * `overflow: clip` 只是裁剪，不建立滚动容器，手势因此能正常传给文档。
+   * 前一行给不支持 clip 的老浏览器兜底。
+   */
   overflow: hidden;
+  overflow: clip;
   /*
    * 这一层是"舞台"，**不能**吃掉纵向滚动：
    *   - touch-action: pan-y 允许纵向平移手势冒泡给文档

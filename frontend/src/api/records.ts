@@ -94,3 +94,15 @@ export async function deleteRecord(
 ): Promise<void> {
   await api.delete(`/api/workspaces/${workspaceId}/records/${recordId}/`)
 }
+
+/** 调整一条动态里媒体的展示顺序（已发布的也能改）。 */
+export async function reorderRecordMedia(
+  workspaceId: number,
+  recordId: number,
+  ids: number[],
+): Promise<void> {
+  await api.post(
+    `/api/workspaces/${workspaceId}/records/${recordId}/media/reorder/`,
+    { ids },
+  )
+}
